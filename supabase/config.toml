@@ -1,0 +1,4 @@
+# Minimal Supabase CLI config. `project_id` is your project ref (the string in
+# the dashboard URL: https://supabase.com/dashboard/project/<project_id>).
+# Used by `supabase functions deploy`. See SETUP.md step 9.
+project_id = "zpndvbkbhfnxjjlzjiil"

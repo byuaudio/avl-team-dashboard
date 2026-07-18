@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   fetchAllProgress,
@@ -8,16 +8,25 @@ import {
 } from '../../lib/api'
 import type { Profile, TrainingProgress } from '../../lib/types'
 import { ROLE_LABELS } from '../../lib/types'
+import { useAuth } from '../auth/AuthContext'
+import { AddMemberForm } from './AddMemberForm'
 
 /**
  * Trainer/manager overview: every employee with their pass-off progress and
  * how many pass-off requests are waiting on them.
  */
 export function TeamTrainingPage() {
+  const { isManager } = useAuth()
   const [roster, setRoster] = useState<Profile[] | null>(null)
   const [progress, setProgress] = useState<TrainingProgress[] | null>(null)
   const [template, setTemplate] = useState<TrainingTemplate | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  const refreshRoster = useCallback(() => {
+    fetchTeamRoster()
+      .then(setRoster)
+      .catch((loadError: Error) => setError(loadError.message))
+  }, [])
 
   useEffect(() => {
     Promise.all([fetchTeamRoster(), fetchAllProgress(), fetchTrainingTemplate()])
@@ -49,6 +58,7 @@ export function TeamTrainingPage() {
   return (
     <div className="stack">
       <h1>Team Training</h1>
+      {isManager && <AddMemberForm onAdded={refreshRoster} />}
       <section className="card">
         <table className="training-table">
           <thead>

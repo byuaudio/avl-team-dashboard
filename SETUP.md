@@ -36,7 +36,20 @@ Estimated time: 30–45 minutes.
    where id = (select id from auth.users where email = 'taylor_glad@byu.edu');
    ```
 
-   ✅ Correct result: "Success" with 1 row affected.
+   ✅ Correct result: **"Success. No rows returned"**. (That's normal for an
+   `update` — it means the statement ran, *not* that nothing changed.)
+3. Confirm it actually set your role — run this and check the output:
+
+   ```sql
+   select p.full_name, p.role, u.email
+   from profiles p
+   join auth.users u on u.id = p.id
+   where u.email = 'taylor_glad@byu.edu';
+   ```
+
+   ✅ Correct result: one row showing `full_name = Taylor Glad` and
+   `role = manager`. If you get **zero rows**, your profile is missing (the
+   sign-up trigger didn't fire) — ask your AI assistant to help.
 
 ## 5. Connect the app locally
 
@@ -58,9 +71,15 @@ Estimated time: 30–45 minutes.
 
 ## 6. Invite the rest of the team
 
-For each employee: **Authentication → Users → Add user** (create with a
-temporary password, or "Send invitation email"). They start as **Student**.
-To promote someone to student trainer, run in SQL Editor:
+Two ways to add people:
+
+- **In the app (recommended):** once you've done step 9, sign in as a manager →
+  **Team Training → "Add a team member"** → enter their name, email, a temporary
+  password, and role. They can sign in immediately and change the password
+  later. (Requires the Edge Function from step 9 to be deployed.)
+- **In Supabase:** **Authentication → Users → Add user** (create with a
+  temporary password). They start as **Student**. To promote someone later, run
+  in SQL Editor:
 
 ```sql
 update profiles set role = 'student_trainer'
@@ -95,3 +114,26 @@ private browser window):
 3. As the student again (refresh): ✅ item shows green with your manager's name.
 
 If anything doesn't match, report exactly what you saw.
+
+## 9. Turn on in-app "Add team member" (deploy the Edge Function)
+
+This deploys the small server function that lets managers add users from inside
+the app. **No terminal needed** — do it in the Supabase dashboard:
+
+1. In Supabase, open **Edge Functions** (left sidebar) → **Create a function**
+   (or **Deploy a new function → Via Editor**).
+2. Name it **exactly** `add-team-member` (the app calls it by this name).
+3. Delete the sample code, then paste in the entire contents of
+   `supabase/functions/add-team-member/index.ts` from this project (open it in
+   VS Code, Select All, Copy).
+4. Leave **Verify JWT** / "Enforce JWT verification" **ON** (only signed-in
+   users may call it). Click **Deploy**.
+   ✅ Correct result: the function shows as deployed with a green/active status.
+   No secrets to set — Supabase injects the service key automatically.
+5. Test it: in the app, sign in as your manager account → **Team Training →
+   "Add a team member"** → add a test student. ✅ They appear in the roster and
+   can sign in with the email + temporary password you set.
+
+(Advanced/optional — deploy from your computer instead:
+`supabase functions deploy add-team-member --project-ref zpndvbkbhfnxjjlzjiil`,
+after installing the Supabase CLI and running `supabase login`.)

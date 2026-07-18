@@ -26,9 +26,10 @@ first session; its durable rules are baked into CLAUDE.md.
   whether the schema needs more fields (e.g. per-item pass-off signature lines,
   dates, section notes, multiple pass-off levels/initials).
 - ASSUMED: one shared training template for all employees.
-- ASSUMED: invite-only account creation (manager invites from the Supabase
-  dashboard) is acceptable "moderately secure" auth. Public signups should stay
-  disabled in Supabase Auth settings; there is no signup UI.
+- Account creation: managers add members in-app via the `add-team-member` Edge
+  Function (RESOLVED — replaces "dashboard only"). Public signups stay disabled;
+  the function is the only creation path besides the dashboard. Temp passwords
+  are manager-set; invite-by-email would need SMTP configured in Supabase.
 - ASSUMED: BYU navy (#002E5D) branding is welcome. Official BYU branding rules
   were not checked.
 
@@ -36,6 +37,10 @@ first session; its durable rules are baked into CLAUDE.md.
 
 - VERIFIED: `npm run build` and `npm run lint` pass; the production build
   serves via `vite preview` and shows the correct title.
+- NOT YET VERIFIED: the `add-team-member` Edge Function end-to-end (deploy,
+  manager-only rejection for non-managers, account creation, role assignment).
+  Deploy via the dashboard Edge Functions editor or `supabase functions deploy`,
+  then test per SETUP.md step 9.
 - NOT YET VERIFIED (no Supabase project existed when built): the migration SQL
   applying cleanly, login, RLS visibility rules, all four RPC functions, the
   signup trigger, and the GitHub Pages workflow. Treat all of these as untested

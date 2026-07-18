@@ -5,6 +5,33 @@ entries here are decisions that shape the architecture.
 
 ---
 
+## 2026-07-18 — In-app member creation via a Supabase Edge Function
+
+**Decision:** Managers add team members from inside the app (Team Training →
+"Add a team member"). The form calls a Supabase Edge Function
+(`add-team-member`) that verifies the caller is an active manager, then uses the
+`service_role` key (server-side only) to create the auth user and set their
+role. The `on_auth_user_created` trigger still creates the profile row.
+
+**Reasoning:** Creating auth users requires the `service_role` key, which must
+never be exposed in the browser. An Edge Function is the smallest piece of
+server-side code that can hold that secret. Taylor asked to add users in the app
+rather than only through the Supabase dashboard.
+
+**Alternatives considered:** Dashboard-only user creation (rejected: Taylor
+wants it in the app); client-side `signUp()` with the anon key (rejected: sign-
+ups are disabled, and it would sign the manager out / need email confirmation);
+putting `service_role` in the SPA (rejected: catastrophic — full DB access to
+anyone who opens devtools). This is the first crack in "no application server"
+(see 2026-07-17) — a single stateless function, not a standing server.
+
+**Benefits:** Secret stays server-side; manager-only enforced server-side;
+no new standing infrastructure. **Tradeoffs:** One more thing to deploy
+(dashboard Edge Functions editor, or `supabase functions deploy`); temporary
+passwords are manager-set for now (invite emails need SMTP config later).
+
+---
+
 ## 2026-07-17 — Static SPA on GitHub Pages, no application server
 
 **Decision:** Build a React + Vite + TypeScript single-page app hosted on

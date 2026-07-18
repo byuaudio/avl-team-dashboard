@@ -64,6 +64,16 @@ src/
     training/MyTrainingPage.tsx     own sheet (wraps TrainingSheet)
     training/TeamTrainingPage.tsx   trainer/manager roster + progress overview
     training/EmployeeTrainingPage.tsx  trainer/manager view of one employee
+    training/AddMemberForm.tsx      manager-only form → add-team-member function
+```
+
+Server-side code (the one exception to "no application server"):
+
+```
+supabase/functions/
+  add-team-member/index.ts   Edge Function: manager-only user creation.
+                             Verifies caller is a manager, then uses the
+                             service_role key to create the auth user + set role.
 ```
 
 Routes: `/login`, `/` (dashboard), `/training`, `/team`, `/team/:employeeId`.
@@ -91,4 +101,5 @@ Supabase URL/anon key come from GitHub Actions **variables** at build time.
 | Look & feel | `src/index.css` (tokens at top for colors/spacing) |
 | Training sheet UI/actions | `src/features/training/TrainingSheet.tsx` |
 | Login/session/role logic | `src/features/auth/` |
+| Adding users / server-side secrets | `supabase/functions/` (Edge Functions) |
 | Deploy pipeline | `.github/workflows/deploy.yml` |
