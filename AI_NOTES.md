@@ -1,0 +1,60 @@
+# AI Notes (for future AI sessions, not user-facing)
+
+## Working relationship
+
+Taylor (taylor_glad@byu.edu) is the product owner and tester, not a coder.
+Explain changes in plain English, give exact manual test steps with expected
+results, and flag judgment calls. The full working agreement was given in the
+first session; its durable rules are baked into CLAUDE.md.
+
+## Environment quirks
+
+- Node.js is installed **user-locally** at
+  `~/.local/node/node-v24.18.0-darwin-x64/bin` (Intel Mac, no Homebrew). It was
+  added to `~/.zshrc` and `~/.bash_profile`, but non-login shells may need
+  `export PATH="$HOME/.local/node/node-v24.18.0-darwin-x64/bin:$PATH"` before
+  npm commands.
+- The project folder name contains a space (`Employee Dashboards`) — quote
+  paths in shell commands.
+
+## Assumptions (mark resolved when confirmed)
+
+- **ASSUMED — most important:** the training sheet content in
+  `supabase/seed_placeholder_training.sql` is invented. Taylor has a real
+  template spreadsheet and a filled-out example (employee Chase Smith) that
+  were never received. When they arrive: replace the seed content, and check
+  whether the schema needs more fields (e.g. per-item pass-off signature lines,
+  dates, section notes, multiple pass-off levels/initials).
+- ASSUMED: one shared training template for all employees.
+- ASSUMED: invite-only account creation (manager invites from the Supabase
+  dashboard) is acceptable "moderately secure" auth. Public signups should stay
+  disabled in Supabase Auth settings; there is no signup UI.
+- ASSUMED: BYU navy (#002E5D) branding is welcome. Official BYU branding rules
+  were not checked.
+
+## Verification status
+
+- VERIFIED: `npm run build` and `npm run lint` pass; the production build
+  serves via `vite preview` and shows the correct title.
+- NOT YET VERIFIED (no Supabase project existed when built): the migration SQL
+  applying cleanly, login, RLS visibility rules, all four RPC functions, the
+  signup trigger, and the GitHub Pages workflow. Treat all of these as untested
+  until Taylor completes SETUP.md and reports results — test them before
+  building features on top.
+
+## Pitfalls
+
+- Migration 0001 ends with a blanket
+  `revoke execute on all functions in schema public from anon, public` —
+  any function added later needs an explicit grant (see CONVENTIONS.md).
+- RLS policies call `current_employee_role()` / `is_trainer_or_manager()`,
+  which are `security definer` specifically to avoid infinite recursion when
+  reading `profiles` from a `profiles` policy. Don't "simplify" them into
+  inline subqueries.
+- `request_passoff` silently no-ops its update path when the item is already
+  passed off, then raises — the raise-after-upsert shape is deliberate but
+  worth revisiting if it confuses anyone.
+- GitHub Pages serves the app under `/<repo-name>/`, hence HashRouter and the
+  `--base` flag in the deploy workflow. BrowserRouter will 404 on refresh.
+- The first manager account must be promoted manually with SQL (SETUP.md step);
+  the signup trigger creates everyone as `student`.
