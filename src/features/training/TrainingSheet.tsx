@@ -1,14 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  addGoal,
   cancelMilestoneRequest,
+  fetchGoalsForEmployee,
   fetchMilestoneProgressForEmployee,
   fetchTeamRoster,
   fetchTrainingTree,
   grantMilestone,
+  removeGoal,
   requestMilestone,
   resetMilestone,
+  updateNodeDetails,
 } from '../../lib/api'
-import type { MilestoneKind, MilestoneProgress, Profile, TrainingNode } from '../../lib/types'
+import type {
+  MilestoneKind,
+  MilestoneProgress,
+  Profile,
+  TrainingGoal,
+  TrainingNode,
+} from '../../lib/types'
 import { MILESTONE_LABELS } from '../../lib/types'
 import { useAuth } from '../auth/AuthContext'
 
@@ -20,19 +30,19 @@ interface TrainingSheetProps {
 
 /**
  * Renders one employee's training sheet as the real template tree
- * (Level → Category → Group → Skill), each skill showing its milestone chips.
- * Actions depend on who is looking:
- *   - the employee themself: request / cancel a milestone on their own sheet
- *   - a trainer or manager viewing someone else: grant a milestone
- *   - a manager viewing someone else: also reset a milestone
- * The database enforces these rules independently; the UI just mirrors them.
+ * (Level → Category → Group → Skill). Each skill shows its milestone chips, a
+ * "goal" star, and opens a photo + explanation when clicked. Actions depend on
+ * who is looking (see MilestoneChip). The database enforces the rules; the UI
+ * just mirrors them.
  */
 export function TrainingSheet({ employeeId }: TrainingSheetProps) {
   const { profile, canGrantPassoffs, isManager } = useAuth()
   const [nodes, setNodes] = useState<TrainingNode[] | null>(null)
   const [progress, setProgress] = useState<MilestoneProgress[] | null>(null)
+  const [goals, setGoals] = useState<TrainingGoal[] | null>(null)
   const [roster, setRoster] = useState<Profile[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [detailNode, setDetailNode] = useState<TrainingNode | null>(null)
 
   const isOwnSheet = profile?.id === employeeId
 
@@ -40,17 +50,22 @@ export function TrainingSheet({ employeeId }: TrainingSheetProps) {
     setProgress(await fetchMilestoneProgressForEmployee(employeeId))
   }, [employeeId])
 
+  const loadGoals = useCallback(async () => {
+    setGoals(await fetchGoalsForEmployee(employeeId))
+  }, [employeeId])
+
   useEffect(() => {
     setNodes(null)
     setProgress(null)
+    setGoals(null)
     Promise.all([fetchTrainingTree(), fetchTeamRoster()])
       .then(([loadedNodes, loadedRoster]) => {
         setNodes(loadedNodes)
         setRoster(loadedRoster)
-        return loadProgress()
+        return Promise.all([loadProgress(), loadGoals()])
       })
       .catch((loadError: Error) => setError(loadError.message))
-  }, [employeeId, loadProgress])
+  }, [employeeId, loadProgress, loadGoals])
 
   const childrenByParent = useMemo(() => {
     const map = new Map<string, TrainingNode[]>()
@@ -69,8 +84,12 @@ export function TrainingSheet({ employeeId }: TrainingSheetProps) {
     return map
   }, [progress])
 
-  // For each node, total milestone slots and how many are granted, across its
-  // whole subtree — used for the "3 / 12" summaries on levels and categories.
+  const goalItemIds = useMemo(
+    () => new Set((goals ?? []).map((g) => g.item_id)),
+    [goals],
+  )
+
+  // For each node: total milestone slots and granted count across its subtree.
   const counts = useMemo(() => {
     const result = new Map<string, { total: number; granted: number }>()
     const visit = (node: TrainingNode): { total: number; granted: number } => {
@@ -101,34 +120,56 @@ export function TrainingSheet({ employeeId }: TrainingSheetProps) {
   }, [roster])
 
   const runAction = useCallback(
-    async (action: () => Promise<void>) => {
+    async (action: () => Promise<void>, reload: () => Promise<void>) => {
       setError(null)
       try {
         await action()
-        await loadProgress()
+        await reload()
       } catch (actionError) {
         setError((actionError as Error).message)
       }
     },
-    [loadProgress],
+    [],
+  )
+
+  const saveDetails = useCallback(
+    async (nodeId: string, details: { description: string; image_url: string | null }) => {
+      await updateNodeDetails(nodeId, details)
+      setNodes((prev) =>
+        (prev ?? []).map((n) => (n.id === nodeId ? { ...n, ...details } : n)),
+      )
+      setDetailNode((prev) => (prev && prev.id === nodeId ? { ...prev, ...details } : prev))
+    },
+    [],
   )
 
   const ctx: NodeContext = {
     childrenByParent,
     counts,
     progressByKey,
+    goalItemIds,
     nameById,
     isOwnSheet,
     canGrant: canGrantPassoffs && !isOwnSheet,
     canReset: isManager && !isOwnSheet,
-    onRequest: (itemId, m) => runAction(() => requestMilestone(itemId, m)),
-    onCancel: (itemId, m) => runAction(() => cancelMilestoneRequest(itemId, m)),
-    onGrant: (itemId, m, notes) => runAction(() => grantMilestone(employeeId, itemId, m, notes)),
-    onReset: (itemId, m) => runAction(() => resetMilestone(employeeId, itemId, m)),
+    onRequest: (itemId, m) => runAction(() => requestMilestone(itemId, m), loadProgress),
+    onCancel: (itemId, m) => runAction(() => cancelMilestoneRequest(itemId, m), loadProgress),
+    onGrant: (itemId, m, notes) =>
+      runAction(() => grantMilestone(employeeId, itemId, m, notes), loadProgress),
+    onReset: (itemId, m) => runAction(() => resetMilestone(employeeId, itemId, m), loadProgress),
+    onToggleGoal: (node) =>
+      runAction(
+        () =>
+          goalItemIds.has(node.id)
+            ? removeGoal(employeeId, node.id)
+            : addGoal(employeeId, node.id),
+        loadGoals,
+      ),
+    onOpenDetail: (node) => setDetailNode(node),
   }
 
   if (error && !nodes) return <p className="error-text">{error}</p>
-  if (!nodes || !progress) return <div className="page-message">Loading…</div>
+  if (!nodes || !progress || !goals) return <div className="page-message">Loading…</div>
 
   const levels = childrenByParent.get(ROOT) ?? []
   if (levels.length === 0) {
@@ -153,6 +194,14 @@ export function TrainingSheet({ employeeId }: TrainingSheetProps) {
       {levels.map((level) => (
         <NodeView key={level.id} node={level} ctx={ctx} />
       ))}
+      {detailNode && (
+        <DetailModal
+          node={detailNode}
+          canEdit={isManager}
+          onSave={saveDetails}
+          onClose={() => setDetailNode(null)}
+        />
+      )}
     </div>
   )
 }
@@ -161,6 +210,7 @@ interface NodeContext {
   childrenByParent: Map<string, TrainingNode[]>
   counts: Map<string, { total: number; granted: number }>
   progressByKey: Map<string, MilestoneProgress>
+  goalItemIds: Set<string>
   nameById: Map<string, string>
   isOwnSheet: boolean
   canGrant: boolean
@@ -169,6 +219,17 @@ interface NodeContext {
   onCancel: (itemId: string, m: MilestoneKind) => void
   onGrant: (itemId: string, m: MilestoneKind, notes?: string) => void
   onReset: (itemId: string, m: MilestoneKind) => void
+  onToggleGoal: (node: TrainingNode) => void
+  onOpenDetail: (node: TrainingNode) => void
+}
+
+function ProgressBar({ granted, total }: { granted: number; total: number }) {
+  const pct = total > 0 ? Math.round((granted / total) * 100) : 0
+  return (
+    <div className="progress-bar" title={`${granted} of ${total}`}>
+      <div className="progress-bar-fill" style={{ width: `${pct}%` }} />
+    </div>
+  )
 }
 
 function NodeView({ node, ctx }: { node: TrainingNode; ctx: NodeContext }) {
@@ -183,15 +244,17 @@ function NodeView({ node, ctx }: { node: TrainingNode; ctx: NodeContext }) {
     <>
       <span className="tree-title">{node.title}</span>
       {c.total > 0 && (
-        <span className="tree-count">
-          {c.granted}/{c.total}
-        </span>
+        <>
+          <span className="tree-count">
+            {c.granted}/{c.total}
+          </span>
+          <ProgressBar granted={c.granted} total={c.total} />
+        </>
       )}
       {node.approver && <span className="tree-approver">Final check: {node.approver}</span>}
     </>
   )
 
-  // Levels and categories collapse/expand; groups are always-open sub-blocks.
   if (node.kind === 'group') {
     return (
       <div className="tree-group">
@@ -218,11 +281,32 @@ function NodeView({ node, ctx }: { node: TrainingNode; ctx: NodeContext }) {
 }
 
 function ItemRow({ node, ctx }: { node: TrainingNode; ctx: NodeContext }) {
+  const isGoal = ctx.goalItemIds.has(node.id)
   return (
     <div className="item-row">
-      <div className="item-title">
-        {node.title}
-        {node.note && <span className="muted item-description"> — {node.note}</span>}
+      <div className="item-main">
+        {ctx.isOwnSheet ? (
+          <button
+            className={`goal-button${isGoal ? ' goal-active' : ''}`}
+            title={isGoal ? 'Remove from goals' : 'Add to goals'}
+            onClick={() => ctx.onToggleGoal(node)}
+          >
+            {isGoal ? '★' : '☆'}
+          </button>
+        ) : (
+          isGoal && (
+            <span className="goal-indicator" title="A goal for this employee">
+              ★
+            </span>
+          )
+        )}
+        <button className="item-title-button" onClick={() => ctx.onOpenDetail(node)}>
+          {node.title}
+          <span className="item-info" aria-hidden>
+            ⓘ
+          </span>
+        </button>
+        {node.note && <span className="muted item-description">{node.note}</span>}
       </div>
       <div className="milestone-chips">
         {node.milestones.map((m) => (
@@ -278,6 +362,103 @@ function MilestoneChip({
           <button className="chip-button" onClick={() => ctx.onReset(itemId, milestone)}>
             Reset
           </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function DetailModal({
+  node,
+  canEdit,
+  onSave,
+  onClose,
+}: {
+  node: TrainingNode
+  canEdit: boolean
+  onSave: (
+    nodeId: string,
+    details: { description: string; image_url: string | null },
+  ) => Promise<void>
+  onClose: () => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [description, setDescription] = useState(node.description)
+  const [imageUrl, setImageUrl] = useState(node.image_url ?? '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSave() {
+    setSaving(true)
+    setError(null)
+    try {
+      await onSave(node.id, {
+        description: description.trim(),
+        image_url: imageUrl.trim() === '' ? null : imageUrl.trim(),
+      })
+      setEditing(false)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal card" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h2>{node.title}</h2>
+          <button className="button-secondary" onClick={onClose}>
+            Close
+          </button>
+        </div>
+
+        {!editing && (
+          <>
+            {node.image_url ? (
+              <img className="modal-image" src={node.image_url} alt={node.title} />
+            ) : (
+              <div className="modal-image-placeholder">No photo yet</div>
+            )}
+            <p>{node.description || <span className="muted">No explanation added yet.</span>}</p>
+            {canEdit && (
+              <button className="button-secondary" onClick={() => setEditing(true)}>
+                Edit photo & explanation
+              </button>
+            )}
+          </>
+        )}
+
+        {editing && (
+          <div className="stack">
+            <label className="modal-field">
+              Photo URL
+              <input
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                placeholder="https://…/photo.jpg"
+              />
+            </label>
+            <label className="modal-field">
+              Explanation
+              <textarea
+                rows={4}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="A short explanation of this item."
+              />
+            </label>
+            {error && <p className="error-text">{error}</p>}
+            <div className="row-actions">
+              <button className="button-primary" onClick={handleSave} disabled={saving}>
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+              <button className="button-secondary" onClick={() => setEditing(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>

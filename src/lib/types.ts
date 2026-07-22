@@ -78,7 +78,19 @@ export interface TrainingNode {
   /** Category-only: raise contribution and final-check approver. */
   dollar_value: number | null
   approver: string | null
+  /** Short footnote shown inline under the item title. */
   note: string
+  /** Item detail: longer explanation and a photo, shown when clicked. */
+  description: string
+  image_url: string | null
+}
+
+/** A skill a student has flagged as a goal to learn (migration 0003). */
+export interface TrainingGoal {
+  id: string
+  employee_id: string
+  item_id: string
+  created_at: string
 }
 
 export interface MilestoneProgress {

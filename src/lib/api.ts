@@ -11,6 +11,7 @@ import type {
   MilestoneKind,
   MilestoneProgress,
   Profile,
+  TrainingGoal,
   TrainingItem,
   TrainingNode,
   TrainingProgress,
@@ -175,6 +176,46 @@ export async function resetMilestone(
     p_item_id: itemId,
     p_milestone: milestone,
   })
+  if (error) throw error
+}
+
+// --- Student goals ("add to goals") ----------------------------------------
+
+export async function fetchGoalsForEmployee(employeeId: string): Promise<TrainingGoal[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('training_goals')
+    .select('*')
+    .eq('employee_id', employeeId)
+  if (error) throw error
+  return data
+}
+
+export async function addGoal(employeeId: string, itemId: string): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('training_goals')
+    .insert({ employee_id: employeeId, item_id: itemId })
+  if (error) throw error
+}
+
+export async function removeGoal(employeeId: string, itemId: string): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('training_goals')
+    .delete()
+    .eq('employee_id', employeeId)
+    .eq('item_id', itemId)
+  if (error) throw error
+}
+
+// --- Item detail (manager edits the photo + explanation) --------------------
+
+export async function updateNodeDetails(
+  nodeId: string,
+  details: { description: string; image_url: string | null },
+): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('training_nodes')
+    .update(details)
+    .eq('id', nodeId)
   if (error) throw error
 }
 
