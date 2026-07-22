@@ -1,60 +1,98 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  cancelPassoffRequest,
-  fetchProgressForEmployee,
+  cancelMilestoneRequest,
+  fetchMilestoneProgressForEmployee,
   fetchTeamRoster,
-  fetchTrainingTemplate,
-  grantPassoff,
-  requestPassoff,
-  resetPassoff,
-  type TrainingTemplate,
+  fetchTrainingTree,
+  grantMilestone,
+  requestMilestone,
+  resetMilestone,
 } from '../../lib/api'
-import type { Profile, TrainingItem, TrainingProgress } from '../../lib/types'
-import { StatusBadge } from '../../components/StatusBadge'
+import type { MilestoneKind, MilestoneProgress, Profile, TrainingNode } from '../../lib/types'
+import { MILESTONE_LABELS } from '../../lib/types'
 import { useAuth } from '../auth/AuthContext'
+
+const ROOT = 'root'
 
 interface TrainingSheetProps {
   employeeId: string
 }
 
 /**
- * Renders one employee's full training sheet, grouped by section.
- * Available actions depend on who is looking:
- *   - the employee themself: request / cancel a pass-off
- *   - a trainer or manager viewing someone else: grant a pass-off
- *   - a manager viewing someone else: also reset a pass-off
+ * Renders one employee's training sheet as the real template tree
+ * (Level → Category → Group → Skill), each skill showing its milestone chips.
+ * Actions depend on who is looking:
+ *   - the employee themself: request / cancel a milestone on their own sheet
+ *   - a trainer or manager viewing someone else: grant a milestone
+ *   - a manager viewing someone else: also reset a milestone
  * The database enforces these rules independently; the UI just mirrors them.
  */
 export function TrainingSheet({ employeeId }: TrainingSheetProps) {
   const { profile, canGrantPassoffs, isManager } = useAuth()
-  const [template, setTemplate] = useState<TrainingTemplate | null>(null)
-  const [progress, setProgress] = useState<TrainingProgress[] | null>(null)
+  const [nodes, setNodes] = useState<TrainingNode[] | null>(null)
+  const [progress, setProgress] = useState<MilestoneProgress[] | null>(null)
   const [roster, setRoster] = useState<Profile[]>([])
   const [error, setError] = useState<string | null>(null)
 
   const isOwnSheet = profile?.id === employeeId
 
   const loadProgress = useCallback(async () => {
-    setProgress(await fetchProgressForEmployee(employeeId))
+    setProgress(await fetchMilestoneProgressForEmployee(employeeId))
   }, [employeeId])
 
   useEffect(() => {
-    setTemplate(null)
+    setNodes(null)
     setProgress(null)
-    Promise.all([fetchTrainingTemplate(), fetchTeamRoster()])
-      .then(([loadedTemplate, loadedRoster]) => {
-        setTemplate(loadedTemplate)
+    Promise.all([fetchTrainingTree(), fetchTeamRoster()])
+      .then(([loadedNodes, loadedRoster]) => {
+        setNodes(loadedNodes)
         setRoster(loadedRoster)
         return loadProgress()
       })
       .catch((loadError: Error) => setError(loadError.message))
   }, [employeeId, loadProgress])
 
-  const progressByItem = useMemo(() => {
-    const map = new Map<string, TrainingProgress>()
-    for (const row of progress ?? []) map.set(row.item_id, row)
+  const childrenByParent = useMemo(() => {
+    const map = new Map<string, TrainingNode[]>()
+    for (const node of nodes ?? []) {
+      const key = node.parent_id ?? ROOT
+      const list = map.get(key) ?? []
+      list.push(node)
+      map.set(key, list)
+    }
+    return map
+  }, [nodes])
+
+  const progressByKey = useMemo(() => {
+    const map = new Map<string, MilestoneProgress>()
+    for (const row of progress ?? []) map.set(`${row.item_id}:${row.milestone}`, row)
     return map
   }, [progress])
+
+  // For each node, total milestone slots and how many are granted, across its
+  // whole subtree — used for the "3 / 12" summaries on levels and categories.
+  const counts = useMemo(() => {
+    const result = new Map<string, { total: number; granted: number }>()
+    const visit = (node: TrainingNode): { total: number; granted: number } => {
+      let total = 0
+      let granted = 0
+      if (node.kind === 'item') {
+        for (const m of node.milestones) {
+          total += 1
+          if (progressByKey.get(`${node.id}:${m}`)?.status === 'granted') granted += 1
+        }
+      }
+      for (const child of childrenByParent.get(node.id) ?? []) {
+        const c = visit(child)
+        total += c.total
+        granted += c.granted
+      }
+      result.set(node.id, { total, granted })
+      return { total, granted }
+    }
+    for (const root of childrenByParent.get(ROOT) ?? []) visit(root)
+    return result
+  }, [childrenByParent, progressByKey])
 
   const nameById = useMemo(() => {
     const map = new Map<string, string>()
@@ -62,123 +100,186 @@ export function TrainingSheet({ employeeId }: TrainingSheetProps) {
     return map
   }, [roster])
 
-  async function runAction(action: () => Promise<void>) {
-    setError(null)
-    try {
-      await action()
-      await loadProgress()
-    } catch (actionError) {
-      setError((actionError as Error).message)
-    }
+  const runAction = useCallback(
+    async (action: () => Promise<void>) => {
+      setError(null)
+      try {
+        await action()
+        await loadProgress()
+      } catch (actionError) {
+        setError((actionError as Error).message)
+      }
+    },
+    [loadProgress],
+  )
+
+  const ctx: NodeContext = {
+    childrenByParent,
+    counts,
+    progressByKey,
+    nameById,
+    isOwnSheet,
+    canGrant: canGrantPassoffs && !isOwnSheet,
+    canReset: isManager && !isOwnSheet,
+    onRequest: (itemId, m) => runAction(() => requestMilestone(itemId, m)),
+    onCancel: (itemId, m) => runAction(() => cancelMilestoneRequest(itemId, m)),
+    onGrant: (itemId, m, notes) => runAction(() => grantMilestone(employeeId, itemId, m, notes)),
+    onReset: (itemId, m) => runAction(() => resetMilestone(employeeId, itemId, m)),
   }
 
-  if (error && !template) return <p className="error-text">{error}</p>
-  if (!template || !progress) return <div className="page-message">Loading…</div>
+  if (error && !nodes) return <p className="error-text">{error}</p>
+  if (!nodes || !progress) return <div className="page-message">Loading…</div>
 
-  const totalItems = template.items.length
-  const passedCount = template.items.filter(
-    (item) => progressByItem.get(item.id)?.status === 'passed_off',
-  ).length
+  const levels = childrenByParent.get(ROOT) ?? []
+  if (levels.length === 0) {
+    return <p className="muted">No training template has been set up yet.</p>
+  }
+
+  const overall = { total: 0, granted: 0 }
+  for (const level of levels) {
+    const c = counts.get(level.id)
+    if (c) {
+      overall.total += c.total
+      overall.granted += c.granted
+    }
+  }
 
   return (
     <div className="stack">
       <p className="muted">
-        {passedCount} of {totalItems} items passed off
+        {overall.granted} of {overall.total} sign-offs complete
       </p>
       {error && <p className="error-text">{error}</p>}
-      {template.sections.map((section) => {
-        const sectionItems = template.items.filter((item) => item.section_id === section.id)
-        if (sectionItems.length === 0) return null
-        return (
-          <section key={section.id} className="card">
-            <h2>{section.title}</h2>
-            <table className="training-table">
-              <tbody>
-                {sectionItems.map((item) => (
-                  <TrainingRow
-                    key={item.id}
-                    item={item}
-                    row={progressByItem.get(item.id)}
-                    isOwnSheet={isOwnSheet}
-                    canGrant={canGrantPassoffs && !isOwnSheet}
-                    canReset={isManager && !isOwnSheet}
-                    passedOffByName={(id) => nameById.get(id) ?? 'Unknown'}
-                    onRequest={() => runAction(() => requestPassoff(item.id))}
-                    onCancel={() => runAction(() => cancelPassoffRequest(item.id))}
-                    onGrant={(notes) => runAction(() => grantPassoff(employeeId, item.id, notes))}
-                    onReset={() => runAction(() => resetPassoff(employeeId, item.id))}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </section>
-        )
-      })}
+      {levels.map((level) => (
+        <NodeView key={level.id} node={level} ctx={ctx} />
+      ))}
     </div>
   )
 }
 
-interface TrainingRowProps {
-  item: TrainingItem
-  row: TrainingProgress | undefined
+interface NodeContext {
+  childrenByParent: Map<string, TrainingNode[]>
+  counts: Map<string, { total: number; granted: number }>
+  progressByKey: Map<string, MilestoneProgress>
+  nameById: Map<string, string>
   isOwnSheet: boolean
   canGrant: boolean
   canReset: boolean
-  passedOffByName: (id: string) => string
-  onRequest: () => void
-  onCancel: () => void
-  onGrant: (notes?: string) => void
-  onReset: () => void
+  onRequest: (itemId: string, m: MilestoneKind) => void
+  onCancel: (itemId: string, m: MilestoneKind) => void
+  onGrant: (itemId: string, m: MilestoneKind, notes?: string) => void
+  onReset: (itemId: string, m: MilestoneKind) => void
 }
 
-function TrainingRow(props: TrainingRowProps) {
-  const { item, row, isOwnSheet, canGrant, canReset } = props
-  const status = row?.status ?? 'not_started'
+function NodeView({ node, ctx }: { node: TrainingNode; ctx: NodeContext }) {
+  const kids = ctx.childrenByParent.get(node.id) ?? []
 
-  function handleGrant() {
-    const notes = window.prompt('Optional note for this pass-off (leave blank for none):')
-    if (notes === null) return // trainer hit Cancel
-    props.onGrant(notes.trim() === '' ? undefined : notes.trim())
+  if (node.kind === 'item') {
+    return <ItemRow node={node} ctx={ctx} />
+  }
+
+  const c = ctx.counts.get(node.id) ?? { total: 0, granted: 0 }
+  const summary = (
+    <>
+      <span className="tree-title">{node.title}</span>
+      {c.total > 0 && (
+        <span className="tree-count">
+          {c.granted}/{c.total}
+        </span>
+      )}
+      {node.approver && <span className="tree-approver">Final check: {node.approver}</span>}
+    </>
+  )
+
+  // Levels and categories collapse/expand; groups are always-open sub-blocks.
+  if (node.kind === 'group') {
+    return (
+      <div className="tree-group">
+        <div className="tree-group-head">{summary}</div>
+        <div className="tree-children">
+          {kids.map((k) => (
+            <NodeView key={k.id} node={k} ctx={ctx} />
+          ))}
+        </div>
+      </div>
+    )
   }
 
   return (
-    <tr>
-      <td>
-        <div className="item-title">{item.title}</div>
-        {item.description && <div className="muted item-description">{item.description}</div>}
-      </td>
-      <td>
-        <StatusBadge status={status} />
-        {status === 'passed_off' && row?.passed_off_by && (
-          <div className="muted item-description">
-            by {props.passedOffByName(row.passed_off_by)}
-            {row.passed_off_at && ` on ${new Date(row.passed_off_at).toLocaleDateString()}`}
-            {row.notes && ` — ${row.notes}`}
-          </div>
-        )}
-      </td>
-      <td className="row-actions">
-        {isOwnSheet && status === 'not_started' && (
-          <button className="button-secondary" onClick={props.onRequest}>
-            Request pass-off
+    <details className={`card tree-node tree-${node.kind}`} open={node.kind === 'category'}>
+      <summary>{summary}</summary>
+      <div className="tree-children">
+        {kids.map((k) => (
+          <NodeView key={k.id} node={k} ctx={ctx} />
+        ))}
+      </div>
+    </details>
+  )
+}
+
+function ItemRow({ node, ctx }: { node: TrainingNode; ctx: NodeContext }) {
+  return (
+    <div className="item-row">
+      <div className="item-title">
+        {node.title}
+        {node.note && <span className="muted item-description"> — {node.note}</span>}
+      </div>
+      <div className="milestone-chips">
+        {node.milestones.map((m) => (
+          <MilestoneChip key={m} itemId={node.id} milestone={m} ctx={ctx} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function MilestoneChip({
+  itemId,
+  milestone,
+  ctx,
+}: {
+  itemId: string
+  milestone: MilestoneKind
+  ctx: NodeContext
+}) {
+  const row = ctx.progressByKey.get(`${itemId}:${milestone}`)
+  const status = row?.status ?? 'not_started'
+
+  function handleGrant() {
+    const notes = window.prompt('Optional note for this sign-off (leave blank for none):')
+    if (notes === null) return // trainer hit Cancel
+    ctx.onGrant(itemId, milestone, notes.trim() === '' ? undefined : notes.trim())
+  }
+
+  return (
+    <div className={`chip chip-${status}`}>
+      <span className="chip-label">{MILESTONE_LABELS[milestone]}</span>
+      {status === 'granted' && row?.granted_by && (
+        <span className="chip-meta">by {ctx.nameById.get(row.granted_by) ?? 'Unknown'}</span>
+      )}
+      {status === 'requested' && <span className="chip-meta">requested</span>}
+      <div className="chip-actions">
+        {ctx.isOwnSheet && status === 'not_started' && (
+          <button className="chip-button" onClick={() => ctx.onRequest(itemId, milestone)}>
+            Request
           </button>
         )}
-        {isOwnSheet && status === 'passoff_requested' && (
-          <button className="button-secondary" onClick={props.onCancel}>
-            Cancel request
+        {ctx.isOwnSheet && status === 'requested' && (
+          <button className="chip-button" onClick={() => ctx.onCancel(itemId, milestone)}>
+            Cancel
           </button>
         )}
-        {canGrant && status !== 'passed_off' && (
-          <button className="button-primary" onClick={handleGrant}>
-            Pass off
+        {ctx.canGrant && status !== 'granted' && (
+          <button className="chip-button chip-button-primary" onClick={handleGrant}>
+            Grant
           </button>
         )}
-        {canReset && status === 'passed_off' && (
-          <button className="button-secondary" onClick={props.onReset}>
+        {ctx.canReset && status === 'granted' && (
+          <button className="chip-button" onClick={() => ctx.onReset(itemId, milestone)}>
             Reset
           </button>
         )}
-      </td>
-    </tr>
+      </div>
+    </div>
   )
 }

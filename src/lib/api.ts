@@ -8,8 +8,11 @@ import { getSupabaseClient } from './supabaseClient'
 import type {
   Announcement,
   EmployeeRole,
+  MilestoneKind,
+  MilestoneProgress,
   Profile,
   TrainingItem,
+  TrainingNode,
   TrainingProgress,
   TrainingSection,
 } from './types'
@@ -93,6 +96,84 @@ export async function resetPassoff(employeeId: string, itemId: string): Promise<
   const { error } = await getSupabaseClient().rpc('reset_passoff', {
     p_employee_id: employeeId,
     p_item_id: itemId,
+  })
+  if (error) throw error
+}
+
+// --- Real-template tree + per-milestone sign-off (migration 0002) -----------
+
+/** The whole training template tree (all nodes, ordered). */
+export async function fetchTrainingTree(): Promise<TrainingNode[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('training_nodes')
+    .select('*')
+    .order('sort_order')
+  if (error) throw error
+  return data
+}
+
+/** One employee's milestone progress. RLS limits students to their own rows. */
+export async function fetchMilestoneProgressForEmployee(
+  employeeId: string,
+): Promise<MilestoneProgress[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('milestone_progress')
+    .select('*')
+    .eq('employee_id', employeeId)
+  if (error) throw error
+  return data
+}
+
+/** Every milestone row visible to the caller (trainers/managers see all). */
+export async function fetchAllMilestoneProgress(): Promise<MilestoneProgress[]> {
+  const { data, error } = await getSupabaseClient().from('milestone_progress').select('*')
+  if (error) throw error
+  return data
+}
+
+export async function requestMilestone(itemId: string, milestone: MilestoneKind): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('request_milestone', {
+    p_item_id: itemId,
+    p_milestone: milestone,
+  })
+  if (error) throw error
+}
+
+export async function cancelMilestoneRequest(
+  itemId: string,
+  milestone: MilestoneKind,
+): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('cancel_milestone_request', {
+    p_item_id: itemId,
+    p_milestone: milestone,
+  })
+  if (error) throw error
+}
+
+export async function grantMilestone(
+  employeeId: string,
+  itemId: string,
+  milestone: MilestoneKind,
+  notes?: string,
+): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('grant_milestone', {
+    p_employee_id: employeeId,
+    p_item_id: itemId,
+    p_milestone: milestone,
+    p_notes: notes ?? null,
+  })
+  if (error) throw error
+}
+
+export async function resetMilestone(
+  employeeId: string,
+  itemId: string,
+  milestone: MilestoneKind,
+): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('reset_milestone', {
+    p_employee_id: employeeId,
+    p_item_id: itemId,
+    p_milestone: milestone,
   })
   if (error) throw error
 }
