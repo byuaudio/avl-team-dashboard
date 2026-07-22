@@ -397,11 +397,7 @@ button:disabled {
   padding-top: 0.5rem;
 }
 
-.tree-group-head {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  font-weight: 600;
+.tree-group > summary .tree-title {
   font-size: 0.92rem;
 }
 

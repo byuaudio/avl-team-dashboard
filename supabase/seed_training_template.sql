@@ -16,7 +16,7 @@ delete from training_nodes;
 do $$
 declare
   l1 uuid; l2 uuid;
-  cat uuid; grp uuid;
+  cat uuid; grp uuid; grp2 uuid;
 begin
   -- ===================== LEVEL 1 — Onboarding =============================
   insert into training_nodes (kind, title, sort_order)
@@ -79,14 +79,16 @@ begin
   insert into training_nodes (parent_id, kind, title, sort_order, milestones)
     values (cat, 'item', 'Dante Level 1', 1, '{submitted,tested}'::milestone_kind[]);
 
-  -- Venues: a venue-EVENT example with the four-stage milestone set
+  -- Venues: "…Events" sub-sections nest further (venue-event → act), and event
+  -- skills track ONLY Guided/Supervised (no Introduced/Passed Off).
   insert into training_nodes (parent_id, kind, title, sort_order, dollar_value, approver)
     values (l2, 'category', 'Venues', 3, 0.10, 'Gabe') returning id into cat;
   insert into training_nodes (parent_id, kind, title, sort_order)
-    values (cat, 'group', 'LaVell Field Events — Marching Band', 1) returning id into grp;
+    values (cat, 'group', 'LaVell Field Events', 1) returning id into grp;
+  insert into training_nodes (parent_id, kind, title, sort_order)
+    values (grp, 'group', 'Marching Band', 1) returning id into grp2;
   insert into training_nodes (parent_id, kind, title, sort_order, milestones)
-  select grp, 'item', t.title, t.ord,
-         '{guided,supervised,introduced,passed_off}'::milestone_kind[]
+  select grp2, 'item', t.title, t.ord, '{guided,supervised}'::milestone_kind[]
   from (values
     ('Inputs', 1), ('Intercomms', 2), ('Console Setup/Check', 3)
   ) as t(title, ord);

@@ -278,21 +278,13 @@ function NodeView({ node, ctx }: { node: TrainingNode; ctx: NodeContext }) {
     </>
   )
 
-  if (node.kind === 'group') {
-    return (
-      <div className="tree-group">
-        <div className="tree-group-head">{summary}</div>
-        <div className="tree-children">
-          {kids.map((k) => (
-            <NodeView key={k.id} node={k} ctx={ctx} />
-          ))}
-        </div>
-      </div>
-    )
-  }
-
+  // Every container (level, category, group, and nested groups) is collapsible
+  // and shows its own progress bar in the summary. Levels and categories render
+  // as cards and start open; groups are lighter and start collapsed.
+  const isCard = node.kind === 'level' || node.kind === 'category'
+  const startOpen = node.kind === 'level' || node.kind === 'category'
   return (
-    <details className={`card tree-node tree-${node.kind}`} open={node.kind === 'category'}>
+    <details className={`tree-node tree-${node.kind}${isCard ? ' card' : ''}`} open={startOpen}>
       <summary>{summary}</summary>
       <div className="tree-children">
         {kids.map((k) => (
