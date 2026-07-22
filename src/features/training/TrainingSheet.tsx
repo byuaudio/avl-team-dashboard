@@ -89,29 +89,35 @@ export function TrainingSheet({ employeeId }: TrainingSheetProps) {
     [goals],
   )
 
-  // For each node: total milestone slots and granted count across its subtree.
+  // For each node across its subtree: total milestone slots, how many are
+  // granted (green), and how many belong to starred/goal items but aren't
+  // granted yet (yellow).
   const counts = useMemo(() => {
-    const result = new Map<string, { total: number; granted: number }>()
-    const visit = (node: TrainingNode): { total: number; granted: number } => {
+    const result = new Map<string, NodeCount>()
+    const visit = (node: TrainingNode): NodeCount => {
       let total = 0
       let granted = 0
+      let goalPending = 0
       if (node.kind === 'item') {
+        const starred = goalItemIds.has(node.id)
         for (const m of node.milestones) {
           total += 1
           if (progressByKey.get(`${node.id}:${m}`)?.status === 'granted') granted += 1
+          else if (starred) goalPending += 1
         }
       }
       for (const child of childrenByParent.get(node.id) ?? []) {
         const c = visit(child)
         total += c.total
         granted += c.granted
+        goalPending += c.goalPending
       }
-      result.set(node.id, { total, granted })
-      return { total, granted }
+      result.set(node.id, { total, granted, goalPending })
+      return { total, granted, goalPending }
     }
     for (const root of childrenByParent.get(ROOT) ?? []) visit(root)
     return result
-  }, [childrenByParent, progressByKey])
+  }, [childrenByParent, progressByKey, goalItemIds])
 
   const nameById = useMemo(() => {
     const map = new Map<string, string>()
@@ -120,7 +126,7 @@ export function TrainingSheet({ employeeId }: TrainingSheetProps) {
   }, [roster])
 
   const runAction = useCallback(
-    async (action: () => Promise<void>, reload: () => Promise<void>) => {
+    async (action: () => Promise<void>, reload: () => Promise<unknown>) => {
       setError(null)
       try {
         await action()
@@ -130,6 +136,12 @@ export function TrainingSheet({ employeeId }: TrainingSheetProps) {
       }
     },
     [],
+  )
+
+  // A granted milestone can un-star an item server-side, so refresh both.
+  const reloadProgressAndGoals = useCallback(
+    () => Promise.all([loadProgress(), loadGoals()]),
+    [loadProgress, loadGoals],
   )
 
   const saveDetails = useCallback(
@@ -154,8 +166,8 @@ export function TrainingSheet({ employeeId }: TrainingSheetProps) {
     canReset: isManager && !isOwnSheet,
     onRequest: (itemId, m) => runAction(() => requestMilestone(itemId, m), loadProgress),
     onCancel: (itemId, m) => runAction(() => cancelMilestoneRequest(itemId, m), loadProgress),
-    onGrant: (itemId, m, notes) =>
-      runAction(() => grantMilestone(employeeId, itemId, m, notes), loadProgress),
+    onGrant: (itemId, m) =>
+      runAction(() => grantMilestone(employeeId, itemId, m), reloadProgressAndGoals),
     onReset: (itemId, m) => runAction(() => resetMilestone(employeeId, itemId, m), loadProgress),
     onToggleGoal: (node) =>
       runAction(
@@ -206,9 +218,15 @@ export function TrainingSheet({ employeeId }: TrainingSheetProps) {
   )
 }
 
+interface NodeCount {
+  total: number
+  granted: number
+  goalPending: number
+}
+
 interface NodeContext {
   childrenByParent: Map<string, TrainingNode[]>
-  counts: Map<string, { total: number; granted: number }>
+  counts: Map<string, NodeCount>
   progressByKey: Map<string, MilestoneProgress>
   goalItemIds: Set<string>
   nameById: Map<string, string>
@@ -217,17 +235,22 @@ interface NodeContext {
   canReset: boolean
   onRequest: (itemId: string, m: MilestoneKind) => void
   onCancel: (itemId: string, m: MilestoneKind) => void
-  onGrant: (itemId: string, m: MilestoneKind, notes?: string) => void
+  onGrant: (itemId: string, m: MilestoneKind) => void
   onReset: (itemId: string, m: MilestoneKind) => void
   onToggleGoal: (node: TrainingNode) => void
   onOpenDetail: (node: TrainingNode) => void
 }
 
-function ProgressBar({ granted, total }: { granted: number; total: number }) {
-  const pct = total > 0 ? Math.round((granted / total) * 100) : 0
+function ProgressBar({ granted, goalPending, total }: NodeCount) {
+  const greenPct = total > 0 ? (granted / total) * 100 : 0
+  const yellowPct = total > 0 ? (goalPending / total) * 100 : 0
   return (
-    <div className="progress-bar" title={`${granted} of ${total}`}>
-      <div className="progress-bar-fill" style={{ width: `${pct}%` }} />
+    <div
+      className="progress-bar"
+      title={`${granted} done${goalPending > 0 ? `, ${goalPending} starred` : ''} of ${total}`}
+    >
+      <div className="progress-bar-fill" style={{ width: `${greenPct}%` }} />
+      <div className="progress-bar-goal" style={{ width: `${yellowPct}%` }} />
     </div>
   )
 }
@@ -239,7 +262,7 @@ function NodeView({ node, ctx }: { node: TrainingNode; ctx: NodeContext }) {
     return <ItemRow node={node} ctx={ctx} />
   }
 
-  const c = ctx.counts.get(node.id) ?? { total: 0, granted: 0 }
+  const c = ctx.counts.get(node.id) ?? { total: 0, granted: 0, goalPending: 0 }
   const summary = (
     <>
       <span className="tree-title">{node.title}</span>
@@ -248,7 +271,7 @@ function NodeView({ node, ctx }: { node: TrainingNode; ctx: NodeContext }) {
           <span className="tree-count">
             {c.granted}/{c.total}
           </span>
-          <ProgressBar granted={c.granted} total={c.total} />
+          <ProgressBar granted={c.granted} goalPending={c.goalPending} total={c.total} />
         </>
       )}
       {node.approver && <span className="tree-approver">Final check: {node.approver}</span>}
@@ -310,7 +333,7 @@ function ItemRow({ node, ctx }: { node: TrainingNode; ctx: NodeContext }) {
       </div>
       <div className="milestone-chips">
         {node.milestones.map((m) => (
-          <MilestoneChip key={m} itemId={node.id} milestone={m} ctx={ctx} />
+          <MilestoneChip key={m} node={node} milestone={m} ctx={ctx} />
         ))}
       </div>
     </div>
@@ -318,22 +341,24 @@ function ItemRow({ node, ctx }: { node: TrainingNode; ctx: NodeContext }) {
 }
 
 function MilestoneChip({
-  itemId,
+  node,
   milestone,
   ctx,
 }: {
-  itemId: string
+  node: TrainingNode
   milestone: MilestoneKind
   ctx: NodeContext
 }) {
+  const itemId = node.id
   const row = ctx.progressByKey.get(`${itemId}:${milestone}`)
   const status = row?.status ?? 'not_started'
 
-  function handleGrant() {
-    const notes = window.prompt('Optional note for this sign-off (leave blank for none):')
-    if (notes === null) return // trainer hit Cancel
-    ctx.onGrant(itemId, milestone, notes.trim() === '' ? undefined : notes.trim())
-  }
+  // Students can't request "Introduced" (a trainer marks it). On event items
+  // (which track Guided/Supervised) they also can't request the final
+  // "Passed Off" — a trainer signs that off. Mirrors migration 0004.
+  const isEvent = node.milestones.includes('guided')
+  const studentRequestable =
+    milestone !== 'introduced' && !(milestone === 'passed_off' && isEvent)
 
   return (
     <div className={`chip chip-${status}`}>
@@ -343,7 +368,7 @@ function MilestoneChip({
       )}
       {status === 'requested' && <span className="chip-meta">requested</span>}
       <div className="chip-actions">
-        {ctx.isOwnSheet && status === 'not_started' && (
+        {ctx.isOwnSheet && studentRequestable && status === 'not_started' && (
           <button className="chip-button" onClick={() => ctx.onRequest(itemId, milestone)}>
             Request
           </button>
@@ -354,8 +379,8 @@ function MilestoneChip({
           </button>
         )}
         {ctx.canGrant && status !== 'granted' && (
-          <button className="chip-button chip-button-primary" onClick={handleGrant}>
-            Grant
+          <button className="chip-button chip-button-primary" onClick={() => ctx.onGrant(itemId, milestone)}>
+            Approve
           </button>
         )}
         {ctx.canReset && status === 'granted' && (

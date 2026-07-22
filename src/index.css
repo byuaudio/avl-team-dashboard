@@ -415,12 +415,18 @@ button:disabled {
   background: #e6eaef;
   border-radius: 999px;
   overflow: hidden;
+  display: flex;
 }
 
 .progress-bar-fill {
   height: 100%;
   background: var(--color-success);
-  border-radius: 999px;
+}
+
+/* Additional starred-but-not-done work, in the same gold as the goal star. */
+.progress-bar-goal {
+  height: 100%;
+  background: #e0a800;
 }
 
 .item-row {

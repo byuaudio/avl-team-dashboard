@@ -45,12 +45,6 @@ begin
     ('Alcohol Test Received', 6), ('Driver License Photo', 7), ('Practical Exam', 8)
   ) as t(title, ord);
 
-  -- Trainers
-  insert into training_nodes (parent_id, kind, title, sort_order, dollar_value)
-    values (l1, 'category', 'Trainers', 3, 0.00) returning id into cat;
-  insert into training_nodes (parent_id, kind, title, sort_order, milestones)
-    values (cat, 'item', 'Student Personal Trainer', 1, '{passed_off}'::milestone_kind[]);
-
   -- ===================== LEVEL 2 — A2 & Stagehand ========================
   insert into training_nodes (kind, title, sort_order)
     values ('level', 'Level 2 — A2 & Stagehand', 2) returning id into l2;
