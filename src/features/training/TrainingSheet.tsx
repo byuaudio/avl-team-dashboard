@@ -43,6 +43,8 @@ export function TrainingSheet({ employeeId }: TrainingSheetProps) {
   const [roster, setRoster] = useState<Profile[]>([])
   const [error, setError] = useState<string | null>(null)
   const [detailNode, setDetailNode] = useState<TrainingNode | null>(null)
+  // Which containers are expanded. Empty = everything collapsed (the default).
+  const [openIds, setOpenIds] = useState<Set<string>>(new Set())
 
   const isOwnSheet = profile?.id === employeeId
 
@@ -125,6 +127,28 @@ export function TrainingSheet({ employeeId }: TrainingSheetProps) {
     return map
   }, [roster])
 
+  // Toggle a container open/closed. Closing a container also collapses every
+  // container nested inside it, so re-opening it starts tidy.
+  const toggleOpen = useCallback(
+    (nodeId: string) => {
+      setOpenIds((prev) => {
+        const next = new Set(prev)
+        if (next.has(nodeId)) {
+          const stack = [nodeId]
+          while (stack.length) {
+            const id = stack.pop() as string
+            next.delete(id)
+            for (const child of childrenByParent.get(id) ?? []) stack.push(child.id)
+          }
+        } else {
+          next.add(nodeId)
+        }
+        return next
+      })
+    },
+    [childrenByParent],
+  )
+
   const runAction = useCallback(
     async (action: () => Promise<void>, reload: () => Promise<unknown>) => {
       setError(null)
@@ -178,6 +202,8 @@ export function TrainingSheet({ employeeId }: TrainingSheetProps) {
         loadGoals,
       ),
     onOpenDetail: (node) => setDetailNode(node),
+    openIds,
+    onToggle: toggleOpen,
   }
 
   if (error && !nodes) return <p className="error-text">{error}</p>
@@ -239,6 +265,8 @@ interface NodeContext {
   onReset: (itemId: string, m: MilestoneKind) => void
   onToggleGoal: (node: TrainingNode) => void
   onOpenDetail: (node: TrainingNode) => void
+  openIds: Set<string>
+  onToggle: (nodeId: string) => void
 }
 
 function ProgressBar({ granted, goalPending, total }: NodeCount) {
@@ -278,14 +306,20 @@ function NodeView({ node, ctx }: { node: TrainingNode; ctx: NodeContext }) {
     </>
   )
 
-  // Every container (level, category, group, and nested groups) is collapsible
-  // and shows its own progress bar in the summary. Levels and categories render
-  // as cards and start open; groups are lighter and start collapsed.
+  // Every container (level, category, group, nested groups) is collapsible and
+  // shows its own progress bar. All start collapsed; open state is controlled by
+  // React so collapsing a container also collapses everything inside it.
   const isCard = node.kind === 'level' || node.kind === 'category'
-  const startOpen = node.kind === 'level' || node.kind === 'category'
   return (
-    <details className={`tree-node tree-${node.kind}${isCard ? ' card' : ''}`} open={startOpen}>
-      <summary>{summary}</summary>
+    <details className={`tree-node tree-${node.kind}${isCard ? ' card' : ''}`} open={ctx.openIds.has(node.id)}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault()
+          ctx.onToggle(node.id)
+        }}
+      >
+        {summary}
+      </summary>
       <div className="tree-children">
         {kids.map((k) => (
           <NodeView key={k.id} node={k} ctx={ctx} />

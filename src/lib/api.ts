@@ -10,6 +10,7 @@ import type {
   EmployeeRole,
   MilestoneKind,
   MilestoneProgress,
+  NodeKind,
   Profile,
   TrainingGoal,
   TrainingItem,
@@ -217,6 +218,57 @@ export async function updateNodeDetails(
     .update(details)
     .eq('id', nodeId)
   if (error) throw error
+}
+
+// --- Template editing (managers restructure the tree) -----------------------
+
+export async function createTrainingNode(input: {
+  parent_id: string | null
+  kind: NodeKind
+  title: string
+  sort_order: number
+  milestones?: MilestoneKind[]
+}): Promise<TrainingNode> {
+  const { data, error } = await getSupabaseClient()
+    .from('training_nodes')
+    .insert({ ...input, milestones: input.milestones ?? [] })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function renameTrainingNode(id: string, title: string): Promise<void> {
+  const { error } = await getSupabaseClient().from('training_nodes').update({ title }).eq('id', id)
+  if (error) throw error
+}
+
+export async function updateNodeMilestones(id: string, milestones: MilestoneKind[]): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('training_nodes')
+    .update({ milestones })
+    .eq('id', id)
+  if (error) throw error
+}
+
+/** Deletes a node (and, via ON DELETE CASCADE, its whole subtree + progress). */
+export async function deleteTrainingNode(id: string): Promise<void> {
+  const { error } = await getSupabaseClient().from('training_nodes').delete().eq('id', id)
+  if (error) throw error
+}
+
+/** Persist a reorder / reparent: new parent + sort_order for each moved node. */
+export async function updateNodePositions(
+  updates: { id: string; parent_id: string | null; sort_order: number }[],
+): Promise<void> {
+  const client = getSupabaseClient()
+  for (const u of updates) {
+    const { error } = await client
+      .from('training_nodes')
+      .update({ parent_id: u.parent_id, sort_order: u.sort_order })
+      .eq('id', u.id)
+    if (error) throw error
+  }
 }
 
 export interface NewTeamMember {
