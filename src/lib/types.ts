@@ -51,3 +51,53 @@ export const ROLE_LABELS: Record<EmployeeRole, string> = {
   student_trainer: 'Student Trainer',
   manager: 'Manager',
 }
+
+// --- Real-template redesign (migration 0002) --------------------------------
+
+export type NodeKind = 'level' | 'category' | 'group' | 'item'
+
+export type MilestoneKind =
+  | 'introduced'
+  | 'guided'
+  | 'supervised'
+  | 'passed_off'
+  | 'submitted'
+  | 'tested'
+
+export type MilestoneStatus = 'not_started' | 'requested' | 'granted'
+
+/** One node in the training template tree (see supabase/migrations/0002). */
+export interface TrainingNode {
+  id: string
+  parent_id: string | null
+  kind: NodeKind
+  title: string
+  sort_order: number
+  /** Ordered milestones this item is signed off on; empty for non-items. */
+  milestones: MilestoneKind[]
+  /** Category-only: raise contribution and final-check approver. */
+  dollar_value: number | null
+  approver: string | null
+  note: string
+}
+
+export interface MilestoneProgress {
+  id: string
+  employee_id: string
+  item_id: string
+  milestone: MilestoneKind
+  status: MilestoneStatus
+  requested_at: string | null
+  granted_by: string | null
+  granted_at: string | null
+  notes: string
+}
+
+export const MILESTONE_LABELS: Record<MilestoneKind, string> = {
+  introduced: 'Introduced',
+  guided: 'Guided',
+  supervised: 'Supervised',
+  passed_off: 'Passed Off',
+  submitted: 'Submitted',
+  tested: 'Tested',
+}
