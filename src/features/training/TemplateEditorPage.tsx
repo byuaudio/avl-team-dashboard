@@ -7,6 +7,7 @@ import {
   setCategoryAmount,
   updateNodeMilestones,
   updateNodePositions,
+  updateNodeRetired,
   updateNodeVenueRef,
 } from '../../lib/api'
 import type { MilestoneKind, NodeKind, TrainingNode } from '../../lib/types'
@@ -196,6 +197,11 @@ export function TemplateEditorPage() {
     setCategoryAmount(id, amount).catch((e: Error) => setError(e.message))
   }, [])
 
+  const setRetired = useCallback((id: string, retired: boolean) => {
+    setNodes((prev) => (prev ?? []).map((n) => (n.id === id ? { ...n, retired } : n)))
+    updateNodeRetired(id, retired).catch((e: Error) => setError(e.message))
+  }, [])
+
   const remove = useCallback(
     (id: string) => {
       const node = byId.get(id)
@@ -231,6 +237,7 @@ export function TemplateEditorPage() {
     onChangeMilestones: changeMilestones,
     onSetVenueRef: setVenueRef,
     onSetAmount: setAmount,
+    onSetRetired: setRetired,
     isAudioManager,
     onAddChild: addChild,
     onRemove: remove,
@@ -279,6 +286,7 @@ interface EditorContext {
   onChangeMilestones: (id: string, m: MilestoneKind[]) => void
   onSetVenueRef: (id: string, venueRef: string | null) => void
   onSetAmount: (id: string, amount: number) => void
+  onSetRetired: (id: string, retired: boolean) => void
   isAudioManager: boolean
   onAddChild: (parentId: string | null, kind: NodeKind) => void
   onRemove: (id: string) => void
@@ -388,7 +396,7 @@ function EditorNode({ node, depth, ctx }: { node: TrainingNode; depth: number; c
   return (
     <div className="editor-node">
       <div
-        className={`editor-row${dropClass}`}
+        className={`editor-row${dropClass}${node.retired ? ' editor-row-retired' : ''}`}
         style={{ paddingLeft: `${depth * 1.1}rem` }}
         onDragOver={handleDragOver}
         onDrop={(e) => {
@@ -496,6 +504,13 @@ function EditorNode({ node, depth, ctx }: { node: TrainingNode; depth: number; c
               </button>
             </>
           )}
+          <button
+            className="chip-button"
+            title={node.retired ? 'Un-retire (make active again)' : 'Retire (keeps paying, hides/locks)'}
+            onClick={() => ctx.onSetRetired(node.id, !node.retired)}
+          >
+            {node.retired ? 'Un-retire' : 'Retire'}
+          </button>
           <button className="chip-button chip-button-danger" title="Delete" onClick={() => ctx.onRemove(node.id)}>
             ✕
           </button>

@@ -97,16 +97,58 @@ export function TrainingSheet({ employeeId }: TrainingSheetProps) {
     [goals],
   )
 
-  // For each node across its subtree: total milestone slots, how many are
-  // granted (green), and how many belong to starred/goal items but aren't
-  // granted yet (yellow).
+  // Effectively-retired = the node or an ancestor is retired.
+  const effectiveRetired = useMemo(() => {
+    const set = new Set<string>()
+    const walk = (id: string, inherited: boolean) => {
+      for (const child of childrenByParent.get(id) ?? []) {
+        const r = inherited || child.retired
+        if (r) set.add(child.id)
+        walk(child.id, r)
+      }
+    }
+    for (const root of childrenByParent.get(ROOT) ?? []) {
+      if (root.retired) set.add(root.id)
+      walk(root.id, root.retired)
+    }
+    return set
+  }, [childrenByParent])
+
+  const isItemComplete = useCallback(
+    (node: TrainingNode) =>
+      node.milestones.length > 0 &&
+      progressByKey.get(`${node.id}:${node.milestones[node.milestones.length - 1]}`)?.status ===
+        'granted',
+    [progressByKey],
+  )
+
+  // A retired item is shown (grayed + locked) only if this employee passed it
+  // off; otherwise it's hidden. Containers show only if a descendant shows.
+  const visibleIds = useMemo(() => {
+    const set = new Set<string>()
+    const visit = (node: TrainingNode): boolean => {
+      if (node.kind === 'item') {
+        const vis = !effectiveRetired.has(node.id) || isItemComplete(node)
+        if (vis) set.add(node.id)
+        return vis
+      }
+      let any = false
+      for (const child of childrenByParent.get(node.id) ?? []) if (visit(child)) any = true
+      if (any) set.add(node.id)
+      return any
+    }
+    for (const root of childrenByParent.get(ROOT) ?? []) visit(root)
+    return set
+  }, [childrenByParent, effectiveRetired, isItemComplete])
+
+  // Progress bars count active (non-retired) items only.
   const counts = useMemo(() => {
     const result = new Map<string, NodeCount>()
     const visit = (node: TrainingNode): NodeCount => {
       let total = 0
       let granted = 0
       let goalPending = 0
-      if (node.kind === 'item') {
+      if (node.kind === 'item' && !effectiveRetired.has(node.id)) {
         const starred = goalItemIds.has(node.id)
         for (const m of node.milestones) {
           total += 1
@@ -125,7 +167,7 @@ export function TrainingSheet({ employeeId }: TrainingSheetProps) {
     }
     for (const root of childrenByParent.get(ROOT) ?? []) visit(root)
     return result
-  }, [childrenByParent, progressByKey, goalItemIds])
+  }, [childrenByParent, progressByKey, goalItemIds, effectiveRetired])
 
   const nameById = useMemo(() => {
     const map = new Map<string, string>()
@@ -211,6 +253,8 @@ export function TrainingSheet({ employeeId }: TrainingSheetProps) {
     openIds,
     onToggle: toggleOpen,
     byId,
+    effectiveRetired,
+    visibleIds,
   }
 
   if (error && !nodes) return <p className="error-text">{error}</p>
@@ -275,6 +319,8 @@ interface NodeContext {
   openIds: Set<string>
   onToggle: (nodeId: string) => void
   byId: Map<string, TrainingNode>
+  effectiveRetired: Set<string>
+  visibleIds: Set<string>
 }
 
 /** All item descendants of a node, in order. */
@@ -308,6 +354,7 @@ function ProgressBar({ granted, goalPending, total }: NodeCount) {
 }
 
 function NodeView({ node, ctx }: { node: TrainingNode; ctx: NodeContext }) {
+  if (!ctx.visibleIds.has(node.id)) return null
   const kids = ctx.childrenByParent.get(node.id) ?? []
 
   if (node.kind === 'item') {
@@ -360,7 +407,9 @@ function VenueLinkedItems({ node, ctx }: { node: TrainingNode; ctx: NodeContext 
   if (!node.venue_ref) return null
   const venue = ctx.byId.get(node.venue_ref)
   if (!venue) return null
-  const items = collectItems(venue.id, ctx.childrenByParent)
+  const items = collectItems(venue.id, ctx.childrenByParent).filter((it) =>
+    ctx.visibleIds.has(it.id),
+  )
   if (items.length === 0) return null
   return (
     <div className="venue-linked">
@@ -374,35 +423,38 @@ function VenueLinkedItems({ node, ctx }: { node: TrainingNode; ctx: NodeContext 
 
 function ItemRow({ node, ctx }: { node: TrainingNode; ctx: NodeContext }) {
   const isGoal = ctx.goalItemIds.has(node.id)
+  const locked = ctx.effectiveRetired.has(node.id)
   return (
-    <div className="item-row">
+    <div className={`item-row${locked ? ' item-locked' : ''}`}>
       <div className="item-main">
-        {ctx.isOwnSheet ? (
-          <button
-            className={`goal-button${isGoal ? ' goal-active' : ''}`}
-            title={isGoal ? 'Remove from goals' : 'Add to goals'}
-            onClick={() => ctx.onToggleGoal(node)}
-          >
-            {isGoal ? '★' : '☆'}
-          </button>
-        ) : (
-          isGoal && (
-            <span className="goal-indicator" title="A goal for this employee">
-              ★
-            </span>
-          )
-        )}
+        {!locked &&
+          (ctx.isOwnSheet ? (
+            <button
+              className={`goal-button${isGoal ? ' goal-active' : ''}`}
+              title={isGoal ? 'Remove from goals' : 'Add to goals'}
+              onClick={() => ctx.onToggleGoal(node)}
+            >
+              {isGoal ? '★' : '☆'}
+            </button>
+          ) : (
+            isGoal && (
+              <span className="goal-indicator" title="A goal for this employee">
+                ★
+              </span>
+            )
+          ))}
         <button className="item-title-button" onClick={() => ctx.onOpenDetail(node)}>
           {node.title}
           <span className="item-info" aria-hidden>
             ⓘ
           </span>
         </button>
+        {locked && <span className="muted item-description">· retired</span>}
         {node.note && <span className="muted item-description">{node.note}</span>}
       </div>
       <div className="milestone-chips">
         {node.milestones.map((m) => (
-          <MilestoneChip key={m} node={node} milestone={m} ctx={ctx} />
+          <MilestoneChip key={m} node={node} milestone={m} ctx={ctx} locked={locked} />
         ))}
       </div>
     </div>
@@ -413,10 +465,12 @@ function MilestoneChip({
   node,
   milestone,
   ctx,
+  locked,
 }: {
   node: TrainingNode
   milestone: MilestoneKind
   ctx: NodeContext
+  locked?: boolean
 }) {
   const itemId = node.id
   const row = ctx.progressByKey.get(`${itemId}:${milestone}`)
@@ -437,22 +491,22 @@ function MilestoneChip({
       )}
       {status === 'requested' && <span className="chip-meta">requested</span>}
       <div className="chip-actions">
-        {ctx.isOwnSheet && studentRequestable && status === 'not_started' && (
+        {!locked && ctx.isOwnSheet && studentRequestable && status === 'not_started' && (
           <button className="chip-button" onClick={() => ctx.onRequest(itemId, milestone)}>
             Request
           </button>
         )}
-        {ctx.isOwnSheet && status === 'requested' && (
+        {!locked && ctx.isOwnSheet && status === 'requested' && (
           <button className="chip-button" onClick={() => ctx.onCancel(itemId, milestone)}>
             Cancel
           </button>
         )}
-        {ctx.canGrant && status !== 'granted' && (
+        {!locked && ctx.canGrant && status !== 'granted' && (
           <button className="chip-button chip-button-primary" onClick={() => ctx.onGrant(itemId, milestone)}>
             Approve
           </button>
         )}
-        {ctx.canReset && status === 'granted' && (
+        {!locked && ctx.canReset && status === 'granted' && (
           <button className="chip-button" onClick={() => ctx.onReset(itemId, milestone)}>
             Reset
           </button>

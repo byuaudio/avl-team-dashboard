@@ -543,6 +543,35 @@ button:disabled {
   opacity: 0.55;
 }
 
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/* Retired items on a sheet: shown for reference, grayed and non-interactive. */
+.item-locked {
+  opacity: 0.6;
+}
+
+.item-locked .chip {
+  background: #f1f1f3;
+}
+
+.editor-row-retired .editor-name {
+  text-decoration: line-through;
+  color: #8a94a0;
+}
+
+/* Manage-column buttons wrap instead of overflowing on narrow screens. */
+.row-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
 .pay-summary {
   display: flex;
   align-items: baseline;

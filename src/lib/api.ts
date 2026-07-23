@@ -260,6 +260,16 @@ export async function updateNodeVenueRef(id: string, venueRef: string | null): P
   if (error) throw error
 }
 
+/** Retire (or un-retire) an item/group: hidden for those who haven't passed it
+ *  off, grayed + locked for those who have, but it keeps counting toward pay. */
+export async function updateNodeRetired(id: string, retired: boolean): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('training_nodes')
+    .update({ retired })
+    .eq('id', id)
+  if (error) throw error
+}
+
 /** Deletes a node (and, via ON DELETE CASCADE, its whole subtree + progress). */
 export async function deleteTrainingNode(id: string): Promise<void> {
   const { error } = await getSupabaseClient().from('training_nodes').delete().eq('id', id)
