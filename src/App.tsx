@@ -10,7 +10,6 @@ import { TeamTrainingPage } from './features/training/TeamTrainingPage'
 import { EmployeeTrainingPage } from './features/training/EmployeeTrainingPage'
 import { TemplateEditorPage } from './features/training/TemplateEditorPage'
 import { RosterPage } from './features/training/RosterPage'
-import { PaySettingsPage } from './features/training/PaySettingsPage'
 import { PayrollPage } from './features/training/PayrollPage'
 import { AccountPage } from './features/auth/AccountPage'
 
@@ -38,7 +37,6 @@ export default function App() {
             <Route path="team" element={<TeamTrainingPage />} />
             <Route path="team/:employeeId" element={<EmployeeTrainingPage />} />
             <Route path="roster" element={<RosterPage />} />
-            <Route path="pay-settings" element={<PaySettingsPage />} />
             <Route path="payroll" element={<PayrollPage />} />
             <Route path="template" element={<TemplateEditorPage />} />
             <Route path="account" element={<AccountPage />} />

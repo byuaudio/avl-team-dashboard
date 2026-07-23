@@ -78,6 +78,48 @@ export interface CompSettings {
   soft_bench_raise: number
   soft_additional_at_max: number
   prior_semester_value: number
+  star_value: number
+  penalty_per_offense: number
+}
+
+/** The six performance-evaluation metrics, 0–5 stars each. */
+export const STAR_METRICS = [
+  'Organization',
+  'Work Ethic',
+  'Efficiency',
+  'Troubleshooting',
+  'Mixing Quality',
+  'Client Interactions',
+] as const
+
+export const MAX_STARS_PER_METRIC = 5
+
+export type StarStatus = 'nominated' | 'awarded'
+
+export interface PerformanceStar {
+  id: string
+  employee_id: string
+  metric: string
+  note: string
+  status: StarStatus
+  created_by: string | null
+  created_at: string
+}
+
+export interface PolicyItem {
+  id: string
+  kind: 'offense' | 'termination'
+  label: string
+  sort_order: number
+}
+
+export interface PolicyPenalty {
+  id: string
+  employee_id: string
+  policy_item_id: string | null
+  note: string
+  created_by: string | null
+  created_at: string
 }
 
 export interface TrainingSection {

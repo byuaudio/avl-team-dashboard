@@ -145,6 +145,16 @@ export function computeLoyalty(
   return { total: perSemester.reduce((a, b) => a + b.raise, 0), perSemester }
 }
 
+/** Performance-star pay: each awarded star is worth star_value. */
+export function performancePay(awardedStars: number, starValue: number): number {
+  return awardedStars * starValue
+}
+
+/** Penalty pay (negative): each applied penalty deducts penalty_per_offense. */
+export function penaltyPay(penaltyCount: number, penaltyPerOffense: number): number {
+  return -penaltyCount * penaltyPerOffense
+}
+
 /** Soft-skills raise per semester (supervisor score only) and total. */
 export function computeSoftSkills(
   semesters: EmployeeSemester[],

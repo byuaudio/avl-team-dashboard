@@ -5,6 +5,7 @@ import type { Profile } from '../../lib/types'
 import { ROLE_LABELS } from '../../lib/types'
 import { TrainingSheet } from './TrainingSheet'
 import { PayPanel } from './PayPanel'
+import { PerformancePanel } from './PerformancePanel'
 
 /** A trainer/manager viewing (and passing off items on) one employee's sheet. */
 export function EmployeeTrainingPage() {
@@ -30,6 +31,7 @@ export function EmployeeTrainingPage() {
         {employee && <span className="muted"> · {ROLE_LABELS[employee.role]}</span>}
       </h1>
       {employee && <PayPanel employee={employee} />}
+      <PerformancePanel employeeId={employeeId} />
       <TrainingSheet employeeId={employeeId} />
     </div>
   )

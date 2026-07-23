@@ -6,14 +6,22 @@ import {
   fetchCompSettings,
   fetchMilestoneProgressForEmployee,
   fetchPayHistory,
+  fetchPenalties,
   fetchSemesters,
+  fetchStars,
   fetchTrainingTree,
   setBaseRate,
   submitPay,
   upsertSemester,
   deleteSemester,
 } from '../../lib/api'
-import { computeLoyalty, computePay, computeSoftSkills } from '../../lib/pay'
+import {
+  computeLoyalty,
+  computePay,
+  computeSoftSkills,
+  penaltyPay,
+  performancePay,
+} from '../../lib/pay'
 import type {
   CompSettings,
   EmployeeSemester,
@@ -44,6 +52,8 @@ export function PayPanel({ employee }: { employee: Profile }) {
   const [settings, setSettings] = useState<CompSettings | null>(null)
   const [semesters, setSemesters] = useState<EmployeeSemester[] | null>(null)
   const [adjustments, setAdjustments] = useState<PayAdjustment[] | null>(null)
+  const [awardedStars, setAwardedStars] = useState(0)
+  const [penaltyCount, setPenaltyCount] = useState(0)
   const [history, setHistory] = useState<PayHistory[]>([])
   const [baseRate, setBaseRateState] = useState(employee.base_rate)
   const [cleared, setCleared] = useState<{ rate: number | null; at: string | null }>({
@@ -73,14 +83,18 @@ export function PayPanel({ employee }: { employee: Profile }) {
       fetchSemesters(employee.id),
       fetchAdjustments(employee.id),
       fetchPayHistory(employee.id),
+      fetchStars(employee.id),
+      fetchPenalties(employee.id),
     ])
-      .then(([n, p, s, sem, adj, hist]) => {
+      .then(([n, p, s, sem, adj, hist, stars, pens]) => {
         setNodes(n)
         setProgress(p)
         setSettings(s)
         setSemesters(sem)
         setAdjustments(adj)
         setHistory(hist)
+        setAwardedStars(stars.filter((x) => x.status === 'awarded').length)
+        setPenaltyCount(pens.length)
       })
       .catch((e: Error) => setError(e.message))
   }, [canSeePay, employee.id])
@@ -113,8 +127,10 @@ export function PayPanel({ employee }: { employee: Profile }) {
   }
 
   const adjTotal = adjustments.reduce((a, b) => a + Number(b.amount), 0)
+  const perfTotal = performancePay(awardedStars, settings.star_value)
+  const penTotal = penaltyPay(penaltyCount, settings.penalty_per_offense)
   const trainingEarned = training.total - training.baseRate
-  const grand = training.total + adjTotal + loyalty.total + soft.total
+  const grand = training.total + adjTotal + loyalty.total + soft.total + perfTotal + penTotal
 
   async function submit() {
     setError(null)
@@ -166,6 +182,14 @@ export function PayPanel({ employee }: { employee: Profile }) {
           <tr>
             <td>Soft skills</td>
             <td>{money(soft.total)}</td>
+          </tr>
+          <tr>
+            <td>Performance ({awardedStars} ★)</td>
+            <td>{money(perfTotal)}</td>
+          </tr>
+          <tr>
+            <td>Penalties ({penaltyCount})</td>
+            <td>{money(penTotal)}</td>
           </tr>
           <tr>
             <td>Adjustments</td>

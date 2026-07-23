@@ -15,7 +15,11 @@ import type {
   NodeKind,
   PayAdjustment,
   PayHistory,
+  PerformanceStar,
+  PolicyItem,
+  PolicyPenalty,
   Profile,
+  StarStatus,
   TrainingGoal,
   TrainingItem,
   TrainingNode,
@@ -457,6 +461,117 @@ export async function fetchPayHistory(employeeId: string): Promise<PayHistory[]>
     .order('submitted_at', { ascending: false })
   if (error) throw error
   return data
+}
+
+// --- Performance stars ------------------------------------------------------
+
+export async function fetchStars(employeeId: string): Promise<PerformanceStar[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('performance_stars')
+    .select('*')
+    .eq('employee_id', employeeId)
+  if (error) throw error
+  return data
+}
+
+export async function fetchAllStars(): Promise<PerformanceStar[]> {
+  const { data, error } = await getSupabaseClient().from('performance_stars').select('*')
+  if (error) throw error
+  return data
+}
+
+/** Award (AM) or nominate (staff) a star. created_by must be the caller. */
+export async function addStar(
+  employeeId: string,
+  metric: string,
+  note: string,
+  status: StarStatus,
+): Promise<void> {
+  const { data: auth } = await getSupabaseClient().auth.getUser()
+  const { error } = await getSupabaseClient().from('performance_stars').insert({
+    employee_id: employeeId,
+    metric,
+    note,
+    status,
+    created_by: auth.user?.id,
+  })
+  if (error) throw error
+}
+
+/** Audio Manager approves a nomination → awarded. */
+export async function approveStar(id: string): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('performance_stars')
+    .update({ status: 'awarded' })
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteStar(id: string): Promise<void> {
+  const { error } = await getSupabaseClient().from('performance_stars').delete().eq('id', id)
+  if (error) throw error
+}
+
+// --- Audio crew policies: line items + applied penalties --------------------
+
+export async function fetchPolicyItems(): Promise<PolicyItem[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('policy_items')
+    .select('*')
+    .order('kind')
+    .order('sort_order')
+  if (error) throw error
+  return data
+}
+
+export async function addPolicyItem(kind: 'offense' | 'termination', label: string): Promise<void> {
+  const { error } = await getSupabaseClient().from('policy_items').insert({ kind, label })
+  if (error) throw error
+}
+
+export async function updatePolicyItem(id: string, label: string): Promise<void> {
+  const { error } = await getSupabaseClient().from('policy_items').update({ label }).eq('id', id)
+  if (error) throw error
+}
+
+export async function deletePolicyItem(id: string): Promise<void> {
+  const { error } = await getSupabaseClient().from('policy_items').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function fetchPenalties(employeeId: string): Promise<PolicyPenalty[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('policy_penalties')
+    .select('*')
+    .eq('employee_id', employeeId)
+  if (error) throw error
+  return data
+}
+
+export async function fetchAllPenalties(): Promise<PolicyPenalty[]> {
+  const { data, error } = await getSupabaseClient().from('policy_penalties').select('*')
+  if (error) throw error
+  return data
+}
+
+export async function addPenalty(
+  employeeId: string,
+  policyItemId: string,
+  note: string,
+): Promise<void> {
+  const { data: auth } = await getSupabaseClient().auth.getUser()
+  const { error } = await getSupabaseClient().from('policy_penalties').insert({
+    employee_id: employeeId,
+    policy_item_id: policyItemId,
+    note,
+    created_by: auth.user?.id,
+  })
+  if (error) throw error
+}
+
+export async function deletePenalty(id: string): Promise<void> {
+  const { error } = await getSupabaseClient().from('policy_penalties').delete().eq('id', id)
+  if (error) throw error
 }
 
 export interface NewTeamMember {
