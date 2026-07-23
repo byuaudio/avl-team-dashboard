@@ -619,6 +619,11 @@ button:disabled {
   margin: 0;
 }
 
+.increase-positive {
+  color: var(--color-success);
+  font-weight: 600;
+}
+
 .editor-amount {
   display: inline-flex;
   align-items: center;

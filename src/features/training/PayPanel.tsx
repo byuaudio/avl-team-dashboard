@@ -5,6 +5,7 @@ import {
   fetchAdjustments,
   fetchCompSettings,
   fetchMilestoneProgressForEmployee,
+  fetchPayHistory,
   fetchSemesters,
   fetchTrainingTree,
   setBaseRate,
@@ -18,6 +19,7 @@ import type {
   EmployeeSemester,
   MilestoneProgress,
   PayAdjustment,
+  PayHistory,
   Profile,
   SemesterTerm,
   TrainingNode,
@@ -42,6 +44,7 @@ export function PayPanel({ employee }: { employee: Profile }) {
   const [settings, setSettings] = useState<CompSettings | null>(null)
   const [semesters, setSemesters] = useState<EmployeeSemester[] | null>(null)
   const [adjustments, setAdjustments] = useState<PayAdjustment[] | null>(null)
+  const [history, setHistory] = useState<PayHistory[]>([])
   const [baseRate, setBaseRateState] = useState(employee.base_rate)
   const [cleared, setCleared] = useState<{ rate: number | null; at: string | null }>({
     rate: employee.submitted_rate,
@@ -69,13 +72,15 @@ export function PayPanel({ employee }: { employee: Profile }) {
       fetchCompSettings(),
       fetchSemesters(employee.id),
       fetchAdjustments(employee.id),
+      fetchPayHistory(employee.id),
     ])
-      .then(([n, p, s, sem, adj]) => {
+      .then(([n, p, s, sem, adj, hist]) => {
         setNodes(n)
         setProgress(p)
         setSettings(s)
         setSemesters(sem)
         setAdjustments(adj)
+        setHistory(hist)
       })
       .catch((e: Error) => setError(e.message))
   }, [canSeePay, employee.id])
@@ -116,6 +121,7 @@ export function PayPanel({ employee }: { employee: Profile }) {
     try {
       await submitPay(employee.id, grand)
       setCleared({ rate: grand, at: new Date().toISOString().slice(0, 10) })
+      fetchPayHistory(employee.id).then(setHistory).catch(() => undefined)
     } catch (e) {
       setError((e as Error).message)
     }
@@ -232,6 +238,32 @@ export function PayPanel({ employee }: { employee: Profile }) {
           </tbody>
         </table>
       </details>
+
+      {history.length > 0 && (
+        <details>
+          <summary className="tree-title">Pay history</summary>
+          <table className="training-table pay-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Previous</th>
+                <th>New</th>
+                <th>Increase</th>
+              </tr>
+            </thead>
+            <tbody>
+              {history.map((h) => (
+                <tr key={h.id}>
+                  <td>{h.submitted_at}</td>
+                  <td>{h.previous_rate == null ? '—' : money(h.previous_rate)}</td>
+                  <td>{money(h.new_rate)}</td>
+                  <td>{h.increase == null ? '—' : money(h.increase)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      )}
     </details>
   )
 }

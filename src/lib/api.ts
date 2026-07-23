@@ -364,6 +364,13 @@ export async function updateCompSettings(patch: Partial<CompSettings>): Promise<
   if (error) throw error
 }
 
+/** All semesters visible to the caller (pay-viewers see everyone's). */
+export async function fetchAllSemesters(): Promise<EmployeeSemester[]> {
+  const { data, error } = await getSupabaseClient().from('employee_semesters').select('*')
+  if (error) throw error
+  return data
+}
+
 export async function fetchSemesters(employeeId: string): Promise<EmployeeSemester[]> {
   const { data, error } = await getSupabaseClient()
     .from('employee_semesters')
@@ -398,6 +405,13 @@ export async function setPriorSemesters(targetId: string, count: number): Promis
 }
 
 // --- Pay adjustments, payroll-cleared rate, and history ---------------------
+
+/** All pay adjustments visible to the caller. */
+export async function fetchAllAdjustments(): Promise<PayAdjustment[]> {
+  const { data, error } = await getSupabaseClient().from('pay_adjustments').select('*')
+  if (error) throw error
+  return data
+}
 
 export async function fetchAdjustments(employeeId: string): Promise<PayAdjustment[]> {
   const { data, error } = await getSupabaseClient()
