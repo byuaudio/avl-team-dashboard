@@ -298,6 +298,26 @@ export async function setMemberArchived(targetId: string, archived: boolean): Pr
   if (error) throw error
 }
 
+/** Staff set a temporary password for a locked-out member (Edge Function). */
+export async function resetMemberPassword(targetId: string, password: string): Promise<void> {
+  const { error } = await getSupabaseClient().functions.invoke('reset-member-password', {
+    body: { targetId, password },
+  })
+  if (error) {
+    if (error instanceof FunctionsHttpError) {
+      const body = await error.context.json().catch(() => null)
+      throw new Error(body?.error ?? 'Could not reset the password.')
+    }
+    throw error
+  }
+}
+
+/** The signed-in user changes their own password. */
+export async function changeOwnPassword(password: string): Promise<void> {
+  const { error } = await getSupabaseClient().auth.updateUser({ password })
+  if (error) throw error
+}
+
 export interface NewTeamMember {
   fullName: string
   email: string

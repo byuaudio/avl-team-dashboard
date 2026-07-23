@@ -19,9 +19,9 @@ export function Layout() {
         </nav>
         <div className="app-user">
           {profile && (
-            <span className="muted">
+            <NavLink to="/account" className="muted account-link">
               {profile.full_name} · {ROLE_LABELS[profile.role]}
-            </span>
+            </NavLink>
           )}
           <button className="button-secondary" onClick={signOut}>
             Sign out

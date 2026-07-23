@@ -9,6 +9,7 @@ import { MyTrainingPage } from './features/training/MyTrainingPage'
 import { TeamTrainingPage } from './features/training/TeamTrainingPage'
 import { EmployeeTrainingPage } from './features/training/EmployeeTrainingPage'
 import { TemplateEditorPage } from './features/training/TemplateEditorPage'
+import { AccountPage } from './features/auth/AccountPage'
 
 // HashRouter (URLs like /#/training) because GitHub Pages is a static host
 // and cannot rewrite arbitrary paths to index.html. See DECISIONS.md.
@@ -34,6 +35,7 @@ export default function App() {
             <Route path="team" element={<TeamTrainingPage />} />
             <Route path="team/:employeeId" element={<EmployeeTrainingPage />} />
             <Route path="template" element={<TemplateEditorPage />} />
+            <Route path="account" element={<AccountPage />} />
           </Route>
         </Routes>
       </AuthProvider>

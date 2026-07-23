@@ -4,6 +4,7 @@ import {
   fetchAllMilestoneProgress,
   fetchTeamRoster,
   fetchTrainingTree,
+  resetMemberPassword,
   setMemberArchived,
   setMemberRole,
 } from '../../lib/api'
@@ -25,6 +26,7 @@ export function TeamTrainingPage() {
   const [error, setError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
+  const [resetTarget, setResetTarget] = useState<Profile | null>(null)
 
   const refreshRoster = useCallback(() => {
     fetchTeamRoster()
@@ -139,14 +141,22 @@ export function TeamTrainingPage() {
                   {canManageMembers && (
                     <td>
                       {canManageThis && (
-                        <button
-                          className="button-secondary"
-                          onClick={() =>
-                            runAction(() => setMemberArchived(person.id, !person.archived))
-                          }
-                        >
-                          {person.archived ? 'Unarchive' : 'Archive'}
-                        </button>
+                        <span className="row-actions">
+                          <button
+                            className="button-secondary"
+                            onClick={() => setResetTarget(person)}
+                          >
+                            Reset password
+                          </button>
+                          <button
+                            className="button-secondary"
+                            onClick={() =>
+                              runAction(() => setMemberArchived(person.id, !person.archived))
+                            }
+                          >
+                            {person.archived ? 'Unarchive' : 'Archive'}
+                          </button>
+                        </span>
                       )}
                     </td>
                   )}
@@ -156,6 +166,74 @@ export function TeamTrainingPage() {
           </tbody>
         </table>
       </section>
+      {resetTarget && (
+        <ResetPasswordModal member={resetTarget} onClose={() => setResetTarget(null)} />
+      )}
+    </div>
+  )
+}
+
+function generateTempPassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+  const bytes = new Uint32Array(10)
+  crypto.getRandomValues(bytes)
+  return 'AVL-' + Array.from(bytes, (b) => chars[b % chars.length]).join('')
+}
+
+function ResetPasswordModal({ member, onClose }: { member: Profile; onClose: () => void }) {
+  const [password, setPassword] = useState(generateTempPassword)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [done, setDone] = useState(false)
+
+  async function handleReset() {
+    setSubmitting(true)
+    setError(null)
+    try {
+      await resetMemberPassword(member.id, password)
+      setDone(true)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal card" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h2>Reset password · {member.full_name}</h2>
+          <button className="button-secondary" onClick={onClose}>
+            Close
+          </button>
+        </div>
+        {!done ? (
+          <>
+            <label className="modal-field">
+              Temporary password
+              <input value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} />
+            </label>
+            <p className="muted">
+              They can sign in with this and change it afterward from “My Account.”
+            </p>
+            {error && <p className="error-text">{error}</p>}
+            <button className="button-primary" onClick={handleReset} disabled={submitting}>
+              {submitting ? 'Setting…' : 'Set password'}
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="success-text">
+              Done. Share this password with {member.full_name}:
+            </p>
+            <p style={{ fontSize: '1.2rem', fontWeight: 700, letterSpacing: '0.02em' }}>{password}</p>
+            <button className="button-primary" onClick={onClose}>
+              Done
+            </button>
+          </>
+        )}
+      </div>
     </div>
   )
 }
