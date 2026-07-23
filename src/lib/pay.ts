@@ -7,7 +7,7 @@
 // in the numerator but not the denominator, so a category can exceed 100% and
 // retired training keeps paying.
 
-import type { MilestoneProgress, TrainingNode } from './types'
+import type { CompSettings, EmployeeSemester, MilestoneProgress, TrainingNode } from './types'
 
 export interface CategoryPay {
   id: string
@@ -105,4 +105,68 @@ export function computePay(
   walkForCategories('root', '')
 
   return { baseRate, categories, total }
+}
+
+export interface SemesterLoyalty {
+  id: string
+  label: string
+  maintenance: number
+  other: number
+  raise: number
+}
+
+export interface SemesterSoft {
+  id: string
+  label: string
+  selfScore: number | null
+  supervisorScore: number | null
+  raise: number
+}
+
+/** Loyalty raise per semester and total. */
+export function computeLoyalty(
+  semesters: EmployeeSemester[],
+  s: CompSettings,
+): { total: number; perSemester: SemesterLoyalty[] } {
+  const denom =
+    s.expected_maintenance_hours * s.weight_maintenance +
+    s.expected_other_hours * s.weight_other
+  const perSemester = semesters.map((sem) => {
+    const num = sem.maintenance_hours * s.weight_maintenance + sem.other_hours * s.weight_other
+    const raise = denom > 0 ? (num / denom) * s.loyalty_avg_value : 0
+    return {
+      id: sem.id,
+      label: `${sem.term} ${sem.year}`,
+      maintenance: sem.maintenance_hours,
+      other: sem.other_hours,
+      raise,
+    }
+  })
+  return { total: perSemester.reduce((a, b) => a + b.raise, 0), perSemester }
+}
+
+/** Soft-skills raise per semester (supervisor score only) and total. */
+export function computeSoftSkills(
+  semesters: EmployeeSemester[],
+  s: CompSettings,
+): { total: number; perSemester: SemesterSoft[] } {
+  const span = s.soft_max - s.soft_benchmark
+  const perSemester = semesters.map((sem) => {
+    const sup = sem.supervisor_score
+    const raise =
+      sup == null || span === 0
+        ? 0
+        : ((sup - s.soft_benchmark) / span) * s.soft_additional_at_max + s.soft_bench_raise
+    return {
+      id: sem.id,
+      label: `${sem.term} ${sem.year}`,
+      selfScore: sem.self_eval_score,
+      supervisorScore: sup,
+      raise,
+    }
+  })
+  return {
+    total: perSemester.reduce((a, b) => a + (b.supervisorScore == null ? 0 : b.raise), 0),
+    perSemester,
+  }
 }

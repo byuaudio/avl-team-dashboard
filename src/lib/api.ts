@@ -7,7 +7,9 @@ import { FunctionsHttpError } from '@supabase/supabase-js'
 import { getSupabaseClient } from './supabaseClient'
 import type {
   Announcement,
+  CompSettings,
   EmployeeRole,
+  EmployeeSemester,
   MilestoneKind,
   MilestoneProgress,
   NodeKind,
@@ -342,6 +344,53 @@ export async function setCategoryAmount(nodeId: string, amount: number): Promise
   const { error } = await getSupabaseClient().rpc('set_category_amount', {
     p_node: nodeId,
     p_amount: amount,
+  })
+  if (error) throw error
+}
+
+// --- Comp settings + per-semester records (loyalty & soft-skills pay) --------
+
+export async function fetchCompSettings(): Promise<CompSettings> {
+  const { data, error } = await getSupabaseClient().from('comp_settings').select('*').single()
+  if (error) throw error
+  return data
+}
+
+/** Audio Manager updates the team-wide metrics (RLS enforces AM). */
+export async function updateCompSettings(patch: Partial<CompSettings>): Promise<void> {
+  const { error } = await getSupabaseClient().from('comp_settings').update(patch).eq('id', true)
+  if (error) throw error
+}
+
+export async function fetchSemesters(employeeId: string): Promise<EmployeeSemester[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('employee_semesters')
+    .select('*')
+    .eq('employee_id', employeeId)
+    .order('year')
+    .order('term')
+  if (error) throw error
+  return data
+}
+
+export async function upsertSemester(
+  row: Omit<EmployeeSemester, 'id'> & { id?: string },
+): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('employee_semesters')
+    .upsert(row, { onConflict: 'employee_id,year,term' })
+  if (error) throw error
+}
+
+export async function deleteSemester(id: string): Promise<void> {
+  const { error } = await getSupabaseClient().from('employee_semesters').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function setPriorSemesters(targetId: string, count: number): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('set_prior_semesters', {
+    p_target: targetId,
+    p_count: count,
   })
   if (error) throw error
 }

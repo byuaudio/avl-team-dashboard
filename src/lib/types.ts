@@ -20,7 +20,42 @@ export interface Profile {
   is_active: boolean
   archived: boolean
   base_rate: number
+  prior_semesters: number
   created_at: string
+}
+
+export type SemesterTerm = 'winter' | 'summer' | 'fall'
+
+export const TERM_LABELS: Record<SemesterTerm, string> = {
+  winter: 'Winter',
+  summer: 'Summer',
+  fall: 'Fall',
+}
+
+export interface EmployeeSemester {
+  id: string
+  employee_id: string
+  year: number
+  term: SemesterTerm
+  maintenance_hours: number
+  other_hours: number
+  self_eval_score: number | null
+  supervisor_score: number | null
+}
+
+/** Team-wide, Audio-Manager-editable pay metrics (singleton). */
+export interface CompSettings {
+  id: boolean
+  expected_maintenance_hours: number
+  expected_other_hours: number
+  weight_maintenance: number
+  weight_other: number
+  loyalty_avg_value: number
+  soft_benchmark: number
+  soft_max: number
+  soft_bench_raise: number
+  soft_additional_at_max: number
+  prior_semester_value: number
 }
 
 export interface TrainingSection {
