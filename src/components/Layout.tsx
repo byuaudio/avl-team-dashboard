@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../features/auth/AuthContext'
 import { ROLE_LABELS } from '../lib/types'
+import { NotificationsBell } from './NotificationsBell'
 
 export function Layout() {
   const { profile, canGrantPassoffs, canManageMembers, canSeePay, signOut } = useAuth()
@@ -14,12 +15,15 @@ export function Layout() {
             Dashboard
           </NavLink>
           <NavLink to="/training">My Training</NavLink>
+          <NavLink to="/book">Book Training</NavLink>
+          <NavLink to="/sessions">My Sessions</NavLink>
           {canGrantPassoffs && <NavLink to="/team">Team Training</NavLink>}
           {canGrantPassoffs && <NavLink to="/availability">My Availability</NavLink>}
           {canManageMembers && <NavLink to="/roster">Team Roster</NavLink>}
           {canSeePay && <NavLink to="/payroll">Payroll</NavLink>}
         </nav>
         <div className="app-user">
+          <NotificationsBell />
           {profile && (
             <NavLink to="/account" className="muted account-link">
               {profile.full_name} · {ROLE_LABELS[profile.role]}

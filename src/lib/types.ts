@@ -24,8 +24,12 @@ export interface Profile {
   /** The rate payroll has cleared (separate from the live computed tally). */
   submitted_rate: number | null
   submitted_at: string | null
+  /** Meeting methods a trainer offers (In Person, Zoom, …). */
+  meeting_methods: string[]
   created_at: string
 }
+
+export const MEETING_METHODS = ['In Person', 'Zoom', 'Google Meet', 'Microsoft Teams', 'Phone'] as const
 
 export interface PayAdjustment {
   id: string
@@ -158,6 +162,10 @@ export interface Booking {
   status: BookingStatus
   topic: string
   item_id: string | null
+  method: string | null
+  description: string
+  staff_notes: string
+  attended: string | null
   created_at: string
   decided_at: string | null
 }

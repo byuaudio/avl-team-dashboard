@@ -6,9 +6,10 @@ import {
   deleteAvailabilityRule,
   fetchAvailabilityBlocks,
   fetchAvailabilityRules,
+  setMeetingMethods,
 } from '../../lib/api'
 import type { AvailabilityBlock, AvailabilityRule } from '../../lib/types'
-import { WEEKDAYS } from '../../lib/types'
+import { MEETING_METHODS, WEEKDAYS } from '../../lib/types'
 import { useAuth } from '../auth/AuthContext'
 
 /** Trainer sets their availability: a recurring weekly pattern plus one-off
@@ -45,6 +46,9 @@ export function AvailabilityPage() {
   const [bEnd, setBEnd] = useState('17:00')
   const [bSlot, setBSlot] = useState(30)
   const [bKind, setBKind] = useState<'open' | 'blackout'>('open')
+  // Meeting methods (from own profile)
+  const [methods, setMethods] = useState<string[]>(profile?.meeting_methods ?? [])
+  const [methodsSaved, setMethodsSaved] = useState(false)
 
   if (!canGrantPassoffs) return <p className="page-message">Availability is for trainers.</p>
   if (error) return <p className="error-text">{error}</p>
@@ -67,6 +71,36 @@ export function AvailabilityPage() {
         Set a repeating weekly pattern, plus one-off open times or blackout (time-off) days.
         Students book fixed-length slots within your open times.
       </p>
+
+      <section className="card stack">
+        <h2>Meeting methods you offer</h2>
+        <div className="chip-row">
+          {MEETING_METHODS.map((m) => {
+            const on = methods.includes(m)
+            return (
+              <button
+                key={m}
+                className={`filter-chip${on ? ' filter-chip-on' : ''}`}
+                onClick={() => {
+                  setMethodsSaved(false)
+                  setMethods((prev) => (on ? prev.filter((x) => x !== m) : [...prev, m]))
+                }}
+              >
+                {m}
+              </button>
+            )
+          })}
+        </div>
+        <div className="row-actions">
+          <button
+            className="button-secondary"
+            onClick={() => run(async () => { await setMeetingMethods(methods); setMethodsSaved(true) })}
+          >
+            Save methods
+          </button>
+          {methodsSaved && <span className="success-text">Saved.</span>}
+        </div>
+      </section>
 
       <section className="card stack">
         <h2>Weekly pattern</h2>

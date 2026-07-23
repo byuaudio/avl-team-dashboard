@@ -7,6 +7,8 @@ import { FunctionsHttpError } from '@supabase/supabase-js'
 import { getSupabaseClient } from './supabaseClient'
 import type {
   Announcement,
+  AppNotification,
+  Booking,
   CompSettings,
   EmployeeRole,
   EmployeeSemester,
@@ -621,6 +623,160 @@ export async function addAvailabilityBlock(
 
 export async function deleteAvailabilityBlock(id: string): Promise<void> {
   const { error } = await getSupabaseClient().from('availability_blocks').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function fetchAllAvailabilityRules(): Promise<AvailabilityRule[]> {
+  const { data, error } = await getSupabaseClient().from('availability_rules').select('*')
+  if (error) throw error
+  return data
+}
+
+export async function fetchAllAvailabilityBlocks(): Promise<AvailabilityBlock[]> {
+  const { data, error } = await getSupabaseClient().from('availability_blocks').select('*')
+  if (error) throw error
+  return data
+}
+
+export async function setMeetingMethods(methods: string[]): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('set_meeting_methods', { p_methods: methods })
+  if (error) throw error
+}
+
+// --- Scheduling: bookings ---------------------------------------------------
+
+export interface BusyRow {
+  trainer_id: string
+  start_at: string
+  end_at: string
+}
+
+export async function fetchTrainerBusy(from: string, to: string): Promise<BusyRow[]> {
+  const { data, error } = await getSupabaseClient().rpc('trainer_busy', { p_from: from, p_to: to })
+  if (error) throw error
+  return data ?? []
+}
+
+/** Bookings the caller can see (their own as student/trainer; staff see all). */
+export async function fetchMyBookings(): Promise<Booking[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('bookings')
+    .select('*')
+    .order('start_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function requestBooking(input: {
+  trainerId: string
+  start: string
+  end: string
+  topic?: string
+  itemId?: string | null
+  method?: string | null
+  description?: string
+}): Promise<string> {
+  const { data, error } = await getSupabaseClient().rpc('request_booking', {
+    p_trainer: input.trainerId,
+    p_start: input.start,
+    p_end: input.end,
+    p_topic: input.topic ?? '',
+    p_item: input.itemId ?? null,
+    p_method: input.method ?? null,
+    p_description: input.description ?? '',
+  })
+  if (error) throw error
+  return data as string
+}
+
+export async function decideBooking(id: string, confirm: boolean): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('decide_booking', {
+    p_booking: id,
+    p_confirm: confirm,
+  })
+  if (error) throw error
+}
+
+export async function cancelBooking(id: string): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('cancel_booking', { p_booking: id })
+  if (error) throw error
+}
+
+export async function rescheduleBooking(id: string, start: string, end: string): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('reschedule_booking', {
+    p_booking: id,
+    p_start: start,
+    p_end: end,
+  })
+  if (error) throw error
+}
+
+export async function updateBookingDetails(
+  id: string,
+  topic: string,
+  description: string,
+  method: string | null,
+): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('update_booking_details', {
+    p_booking: id,
+    p_topic: topic,
+    p_description: description,
+    p_method: method,
+  })
+  if (error) throw error
+}
+
+export async function setBookingOutcome(id: string, outcome: 'completed' | 'no_show'): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('set_booking_outcome', {
+    p_booking: id,
+    p_outcome: outcome,
+  })
+  if (error) throw error
+}
+
+export async function setBookingNotes(id: string, notes: string): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('set_booking_notes', {
+    p_booking: id,
+    p_notes: notes,
+  })
+  if (error) throw error
+}
+
+export async function reassignBooking(id: string, trainerId: string): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('reassign_booking', {
+    p_booking: id,
+    p_trainer: trainerId,
+  })
+  if (error) throw error
+}
+
+export async function deleteBookingRpc(id: string): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('delete_booking', { p_booking: id })
+  if (error) throw error
+}
+
+// --- Notifications ----------------------------------------------------------
+
+export async function fetchNotifications(): Promise<AppNotification[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('notifications')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(30)
+  if (error) throw error
+  return data
+}
+
+export async function markNotificationRead(id: string): Promise<void> {
+  const { error } = await getSupabaseClient().from('notifications').update({ read: true }).eq('id', id)
+  if (error) throw error
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('notifications')
+    .update({ read: true })
+    .eq('read', false)
   if (error) throw error
 }
 
