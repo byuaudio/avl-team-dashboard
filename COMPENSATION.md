@@ -12,8 +12,8 @@ rate = starting_rate
      + Σ training categories               (BUILT — Phase 2 part 1)
      + loyalty                             (spec'd, not built)
      + soft_skills                         (spec'd, not built)
-     + performance_stars                   (spec'd, not built)
-     − audio_crew_policy_penalties         (spec'd, not built)
+     + performance_stars                   (BUILT — Phase 2 part 5)
+     − audio_crew_policy_penalties         (BUILT — Phase 2 part 5)
 ```
 
 Chase check: 14.00 base + 0.50 prior + ~0.77 training + 0.96 loyalty + 0.87 soft
