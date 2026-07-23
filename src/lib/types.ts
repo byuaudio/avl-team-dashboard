@@ -122,6 +122,55 @@ export interface PolicyPenalty {
   created_at: string
 }
 
+// --- Scheduling (migration 0012) --------------------------------------------
+
+export const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
+
+export type BookingStatus = 'pending' | 'confirmed' | 'declined' | 'cancelled'
+
+export interface AvailabilityRule {
+  id: string
+  trainer_id: string
+  weekday: number
+  start_time: string
+  end_time: string
+  slot_minutes: number
+  created_at: string
+}
+
+export interface AvailabilityBlock {
+  id: string
+  trainer_id: string
+  on_date: string
+  start_time: string
+  end_time: string
+  slot_minutes: number
+  kind: 'open' | 'blackout'
+  created_at: string
+}
+
+export interface Booking {
+  id: string
+  trainer_id: string
+  student_id: string
+  start_at: string
+  end_at: string
+  status: BookingStatus
+  topic: string
+  item_id: string | null
+  created_at: string
+  decided_at: string | null
+}
+
+export interface AppNotification {
+  id: string
+  user_id: string
+  body: string
+  link: string | null
+  read: boolean
+  created_at: string
+}
+
 export interface TrainingSection {
   id: string
   title: string

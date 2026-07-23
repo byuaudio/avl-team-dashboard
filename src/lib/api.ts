@@ -10,6 +10,8 @@ import type {
   CompSettings,
   EmployeeRole,
   EmployeeSemester,
+  AvailabilityBlock,
+  AvailabilityRule,
   MilestoneKind,
   MilestoneProgress,
   NodeKind,
@@ -571,6 +573,54 @@ export async function addPenalty(
 
 export async function deletePenalty(id: string): Promise<void> {
   const { error } = await getSupabaseClient().from('policy_penalties').delete().eq('id', id)
+  if (error) throw error
+}
+
+// --- Scheduling: trainer availability ---------------------------------------
+
+export async function fetchAvailabilityRules(trainerId: string): Promise<AvailabilityRule[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('availability_rules')
+    .select('*')
+    .eq('trainer_id', trainerId)
+    .order('weekday')
+    .order('start_time')
+  if (error) throw error
+  return data
+}
+
+export async function addAvailabilityRule(
+  rule: Omit<AvailabilityRule, 'id' | 'created_at'>,
+): Promise<void> {
+  const { error } = await getSupabaseClient().from('availability_rules').insert(rule)
+  if (error) throw error
+}
+
+export async function deleteAvailabilityRule(id: string): Promise<void> {
+  const { error } = await getSupabaseClient().from('availability_rules').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function fetchAvailabilityBlocks(trainerId: string): Promise<AvailabilityBlock[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('availability_blocks')
+    .select('*')
+    .eq('trainer_id', trainerId)
+    .order('on_date')
+    .order('start_time')
+  if (error) throw error
+  return data
+}
+
+export async function addAvailabilityBlock(
+  block: Omit<AvailabilityBlock, 'id' | 'created_at'>,
+): Promise<void> {
+  const { error } = await getSupabaseClient().from('availability_blocks').insert(block)
+  if (error) throw error
+}
+
+export async function deleteAvailabilityBlock(id: string): Promise<void> {
+  const { error } = await getSupabaseClient().from('availability_blocks').delete().eq('id', id)
   if (error) throw error
 }
 

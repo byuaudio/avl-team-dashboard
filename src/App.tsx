@@ -11,6 +11,7 @@ import { EmployeeTrainingPage } from './features/training/EmployeeTrainingPage'
 import { TemplateEditorPage } from './features/training/TemplateEditorPage'
 import { RosterPage } from './features/training/RosterPage'
 import { PayrollPage } from './features/training/PayrollPage'
+import { AvailabilityPage } from './features/scheduling/AvailabilityPage'
 import { AccountPage } from './features/auth/AccountPage'
 
 // HashRouter (URLs like /#/training) because GitHub Pages is a static host
@@ -38,6 +39,7 @@ export default function App() {
             <Route path="team/:employeeId" element={<EmployeeTrainingPage />} />
             <Route path="roster" element={<RosterPage />} />
             <Route path="payroll" element={<PayrollPage />} />
+            <Route path="availability" element={<AvailabilityPage />} />
             <Route path="template" element={<TemplateEditorPage />} />
             <Route path="account" element={<AccountPage />} />
           </Route>

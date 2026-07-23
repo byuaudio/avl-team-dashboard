@@ -15,6 +15,7 @@ export function Layout() {
           </NavLink>
           <NavLink to="/training">My Training</NavLink>
           {canGrantPassoffs && <NavLink to="/team">Team Training</NavLink>}
+          {canGrantPassoffs && <NavLink to="/availability">My Availability</NavLink>}
           {canManageMembers && <NavLink to="/roster">Team Roster</NavLink>}
           {canSeePay && <NavLink to="/payroll">Payroll</NavLink>}
         </nav>
