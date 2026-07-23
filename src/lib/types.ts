@@ -83,6 +83,8 @@ export interface TrainingNode {
   /** Item detail: longer explanation and a photo, shown when clicked. */
   description: string
   image_url: string | null
+  /** Event group only: the venue group whose items to also surface here. */
+  venue_ref: string | null
 }
 
 /** A skill a student has flagged as a goal to learn (migration 0003). */

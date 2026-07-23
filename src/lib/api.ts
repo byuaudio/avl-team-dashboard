@@ -251,6 +251,15 @@ export async function updateNodeMilestones(id: string, milestones: MilestoneKind
   if (error) throw error
 }
 
+/** Tag (or clear) the venue whose items surface under an event group. */
+export async function updateNodeVenueRef(id: string, venueRef: string | null): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('training_nodes')
+    .update({ venue_ref: venueRef })
+    .eq('id', id)
+  if (error) throw error
+}
+
 /** Deletes a node (and, via ON DELETE CASCADE, its whole subtree + progress). */
 export async function deleteTrainingNode(id: string): Promise<void> {
   const { error } = await getSupabaseClient().from('training_nodes').delete().eq('id', id)

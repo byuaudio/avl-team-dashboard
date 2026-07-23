@@ -87,7 +87,7 @@ begin
   grp := _mk(cat, 'group', 'Basic Concepts', 8);
   perform _items(grp, IP, 'Dynamic vs Condenser', 'Mic/Line Level', 'Balanced vs Unbalanced');
 
-  cat := _mk(lvl, 'category', 'Certification', 2, 0.05);
+  cat := _mk(lvl, 'category', 'Certifications', 2, 0.05);
   perform _items(cat, ST, 'Dante Level 1');
 
   cat := _mk(lvl, 'category', 'Venues', 3, 0.10, 'Gabe');
@@ -176,7 +176,7 @@ begin
   grp := _mk(cat, 'group', 'Broadcast Mix', 9);
   perform _items(grp, IP, 'Mix Basics & Goals', 'Control Room Mix', 'Stream Mix');
 
-  cat := _mk(lvl, 'category', 'Certification', 2, 0.05);
+  cat := _mk(lvl, 'category', 'Certifications', 2, 0.05);
   perform _items(cat, ST, 'Dante Level 2');
 
   cat := _mk(lvl, 'category', 'Venues', 3, 0.10, 'Gabe');
@@ -239,7 +239,7 @@ begin
   grp := _mk(cat, 'group', 'Basic Concepts', 9);
   perform _items(grp, IP, 'Mixes & Matrices', 'NL4 and NL8 signal path', 'EQ''s for different source', 'Intermediate Gain Staging', 'Intermediate Internal Routing', 'Dynamics for different sources', 'How mics work', 'Groups/Fixed Mixes', 'Pre and Post Fade');
 
-  cat := _mk(lvl, 'category', 'Certification', 2, 0.05);
+  cat := _mk(lvl, 'category', 'Certifications', 2, 0.05);
   perform _items(cat, ST, 'Dante Level 3');
 
   cat := _mk(lvl, 'category', 'Venues', 3, 0.10, 'Gabe');
@@ -287,7 +287,7 @@ begin
   grp := _mk(cat, 'group', 'Advanced Concepts', 8);
   perform _items(grp, IP, 'Phase for Tuning', 'Virtual Sound Check', 'Analog Split', 'EQ to adjust for Phase', 'Matrix mixing', 'Parallel Compression', 'Group Processing');
 
-  cat := _mk(lvl, 'category', 'Certification', 2, 0.05);
+  cat := _mk(lvl, 'category', 'Certifications', 2, 0.05);
   perform _items(cat, ST, 'Smaart Fundamentals');
 
   cat := _mk(lvl, 'category', 'Venues', 3, 0.10, 'FTE');
@@ -314,7 +314,7 @@ begin
   grp := _mk(cat, 'group', 'Axient', 4);
   perform _items(grp, IP, 'Showlink');
 
-  cat := _mk(lvl, 'category', 'Certification', 2, 0.05);
+  cat := _mk(lvl, 'category', 'Certifications', 2, 0.05);
   perform _items(cat, ST, 'Q-SYS Level 1');
 
   cat := _mk(lvl, 'category', 'Venues', 3, 0.10, 'FTE');
@@ -392,3 +392,29 @@ end $$;
 
 drop function _items(uuid, milestone_kind[], text[]);
 drop function _mk(uuid, node_kind, text, int, numeric, text);
+
+-- Split "Events" into their own category (beside Venues) per level, and tag
+-- each "X Events" group to the venue group "X" in the same level so the sheet
+-- can surface that venue's items under the event.
+do $$
+declare lvl record; venues_cat uuid; events_cat uuid; next_sort int; appr text;
+begin
+  for lvl in select id from training_nodes where kind = 'level' loop
+    select id, approver into venues_cat, appr from training_nodes
+      where parent_id = lvl.id and kind = 'category' and title = 'Venues';
+    if venues_cat is not null and exists (
+      select 1 from training_nodes where parent_id = venues_cat and title ilike '%Events%'
+    ) then
+      select coalesce(max(sort_order), 0) + 1 into next_sort
+        from training_nodes where parent_id = lvl.id and kind = 'category';
+      insert into training_nodes (parent_id, kind, title, sort_order, dollar_value, approver)
+        values (lvl.id, 'category', 'Events', next_sort, 0.10, appr) returning id into events_cat;
+      update training_nodes set parent_id = events_cat
+        where parent_id = venues_cat and title ilike '%Events%';
+      update training_nodes ev set venue_ref = v.id
+        from training_nodes v
+        where ev.parent_id = events_cat and v.parent_id = venues_cat and v.kind = 'group'
+          and trim(replace(ev.title, ' Events', '')) = v.title;
+    end if;
+  end loop;
+end $$;

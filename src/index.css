@@ -654,6 +654,25 @@ button:disabled {
   gap: 0.15rem;
 }
 
+/* --- Venue items surfaced under a tagged event group ----------------------- */
+
+.venue-linked {
+  margin-top: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius);
+  background: #f3eefb;
+  border: 1px solid #e0d3f5;
+}
+
+.venue-linked-head {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #6b4ea8;
+  margin-bottom: 0.2rem;
+}
+
 /* --- Item detail modal ----------------------------------------------------- */
 
 .modal-overlay {

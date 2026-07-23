@@ -6,6 +6,7 @@ import {
   renameTrainingNode,
   updateNodeMilestones,
   updateNodePositions,
+  updateNodeVenueRef,
 } from '../../lib/api'
 import type { MilestoneKind, NodeKind, TrainingNode } from '../../lib/types'
 import { useAuth } from '../auth/AuthContext'
@@ -113,6 +114,11 @@ export function TemplateEditorPage() {
         setError('Cannot move a section into itself.')
         return
       }
+      // Items are leaves — nothing can live inside them.
+      if (newParent && byId.get(newParent)?.kind === 'item') {
+        setError('Items cannot contain other items.')
+        return
+      }
 
       const sibs = (childrenByParent.get(newParent ?? ROOT) ?? []).filter((n) => n.id !== moveId)
       let index: number
@@ -151,7 +157,7 @@ export function TemplateEditorPage() {
     async (parentId: string | null, kind: NodeKind) => {
       setError(null)
       const sibs = childrenByParent.get(parentId ?? ROOT) ?? []
-      const label = kind === 'item' ? 'New skill' : `New ${kind}`
+      const label = kind === 'item' ? 'New item' : `New ${kind}`
       try {
         const created = await createTrainingNode({
           parent_id: parentId,
@@ -179,6 +185,11 @@ export function TemplateEditorPage() {
     updateNodeMilestones(id, milestones).catch((e: Error) => setError(e.message))
   }, [])
 
+  const setVenueRef = useCallback((id: string, venueRef: string | null) => {
+    setNodes((prev) => (prev ?? []).map((n) => (n.id === id ? { ...n, venue_ref: venueRef } : n)))
+    updateNodeVenueRef(id, venueRef).catch((e: Error) => setError(e.message))
+  }, [])
+
   const remove = useCallback(
     (id: string) => {
       const node = byId.get(id)
@@ -204,12 +215,14 @@ export function TemplateEditorPage() {
 
   const ctx: EditorContext = {
     childrenByParent,
+    byId,
     openIds,
     dragId,
     drop,
     onToggle: toggle,
     onRename: rename,
     onChangeMilestones: changeMilestones,
+    onSetVenueRef: setVenueRef,
     onAddChild: addChild,
     onRemove: remove,
     onDragStart: setDragId,
@@ -248,18 +261,57 @@ export function TemplateEditorPage() {
 
 interface EditorContext {
   childrenByParent: Map<string, TrainingNode[]>
+  byId: Map<string, TrainingNode>
   openIds: Set<string>
   dragId: string | null
   drop: { id: string; pos: DropPos } | null
   onToggle: (id: string) => void
   onRename: (id: string, title: string) => void
   onChangeMilestones: (id: string, m: MilestoneKind[]) => void
+  onSetVenueRef: (id: string, venueRef: string | null) => void
   onAddChild: (parentId: string | null, kind: NodeKind) => void
   onRemove: (id: string) => void
   onDragStart: (id: string) => void
   onDragEnd: () => void
   onDragOverRow: (id: string, pos: DropPos) => void
   onDropRow: (id: string, pos: DropPos) => void
+}
+
+/** Title of the nearest ancestor category (walking up the tree). */
+function categoryTitleOf(node: TrainingNode, byId: Map<string, TrainingNode>): string | null {
+  let pid = node.parent_id
+  while (pid) {
+    const p = byId.get(pid)
+    if (!p) break
+    if (p.kind === 'category') return p.title
+    pid = p.parent_id
+  }
+  return null
+}
+
+/** Venue groups in the same level's "Venues" category — the tag options. */
+function venueGroupsInLevel(
+  node: TrainingNode,
+  byId: Map<string, TrainingNode>,
+  childrenByParent: Map<string, TrainingNode[]>,
+): TrainingNode[] {
+  let pid = node.parent_id
+  let levelId: string | null = null
+  while (pid) {
+    const p = byId.get(pid)
+    if (!p) break
+    if (p.kind === 'level') {
+      levelId = p.id
+      break
+    }
+    pid = p.parent_id
+  }
+  if (!levelId) return []
+  const venuesCat = (childrenByParent.get(levelId) ?? []).find(
+    (c) => c.kind === 'category' && c.title === 'Venues',
+  )
+  if (!venuesCat) return []
+  return (childrenByParent.get(venuesCat.id) ?? []).filter((c) => c.kind === 'group')
 }
 
 function EditorNode({ node, depth, ctx }: { node: TrainingNode; depth: number; ctx: EditorContext }) {
@@ -279,8 +331,11 @@ function EditorNode({ node, depth, ctx }: { node: TrainingNode; depth: number; c
     e.preventDefault()
     const rect = e.currentTarget.getBoundingClientRect()
     const y = e.clientY - rect.top
-    const pos: DropPos =
+    let pos: DropPos =
       y < rect.height * 0.3 ? 'before' : y > rect.height * 0.7 ? 'after' : 'inside'
+    // Items can't contain anything, so never offer "nest inside" an item —
+    // that's what made dragged rows disappear.
+    if (node.kind === 'item' && pos === 'inside') pos = y < rect.height / 2 ? 'before' : 'after'
     ctx.onDragOverRow(node.id, pos)
   }
 
@@ -292,6 +347,8 @@ function EditorNode({ node, depth, ctx }: { node: TrainingNode; depth: number; c
   }
 
   const presetKey = node.milestones.join(',')
+  const isEventGroup = node.kind === 'group' && categoryTitleOf(node, ctx.byId) === 'Events'
+  const venueOptions = isEventGroup ? venueGroupsInLevel(node, ctx.byId, ctx.childrenByParent) : []
 
   return (
     <div className="editor-node">
@@ -345,6 +402,22 @@ function EditorNode({ node, depth, ctx }: { node: TrainingNode; depth: number; c
 
         <span className={`editor-kind kind-${node.kind}`}>{node.kind}</span>
 
+        {isEventGroup && (
+          <select
+            className="editor-milestones"
+            value={node.venue_ref ?? ''}
+            onChange={(e) => ctx.onSetVenueRef(node.id, e.target.value || null)}
+            title="Tag a venue whose items show under this event"
+          >
+            <option value="">venue: none</option>
+            {venueOptions.map((v) => (
+              <option key={v.id} value={v.id}>
+                venue: {v.title}
+              </option>
+            ))}
+          </select>
+        )}
+
         {node.kind === 'item' && (
           <select
             className="editor-milestones"
@@ -370,10 +443,10 @@ function EditorNode({ node, depth, ctx }: { node: TrainingNode; depth: number; c
             <>
               <button
                 className="chip-button"
-                title="Add a skill inside"
+                title="Add an item inside"
                 onClick={() => ctx.onAddChild(node.id, 'item')}
               >
-                + skill
+                + item
               </button>
               <button
                 className="chip-button"

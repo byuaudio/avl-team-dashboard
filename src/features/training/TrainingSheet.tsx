@@ -80,6 +80,12 @@ export function TrainingSheet({ employeeId }: TrainingSheetProps) {
     return map
   }, [nodes])
 
+  const byId = useMemo(() => {
+    const map = new Map<string, TrainingNode>()
+    for (const node of nodes ?? []) map.set(node.id, node)
+    return map
+  }, [nodes])
+
   const progressByKey = useMemo(() => {
     const map = new Map<string, MilestoneProgress>()
     for (const row of progress ?? []) map.set(`${row.item_id}:${row.milestone}`, row)
@@ -204,6 +210,7 @@ export function TrainingSheet({ employeeId }: TrainingSheetProps) {
     onOpenDetail: (node) => setDetailNode(node),
     openIds,
     onToggle: toggleOpen,
+    byId,
   }
 
   if (error && !nodes) return <p className="error-text">{error}</p>
@@ -267,6 +274,23 @@ interface NodeContext {
   onOpenDetail: (node: TrainingNode) => void
   openIds: Set<string>
   onToggle: (nodeId: string) => void
+  byId: Map<string, TrainingNode>
+}
+
+/** All item descendants of a node, in order. */
+function collectItems(
+  rootId: string,
+  childrenByParent: Map<string, TrainingNode[]>,
+): TrainingNode[] {
+  const out: TrainingNode[] = []
+  const walk = (id: string) => {
+    for (const child of childrenByParent.get(id) ?? []) {
+      if (child.kind === 'item') out.push(child)
+      else walk(child.id)
+    }
+  }
+  walk(rootId)
+  return out
 }
 
 function ProgressBar({ granted, goalPending, total }: NodeCount) {
@@ -324,8 +348,27 @@ function NodeView({ node, ctx }: { node: TrainingNode; ctx: NodeContext }) {
         {kids.map((k) => (
           <NodeView key={k.id} node={k} ctx={ctx} />
         ))}
+        <VenueLinkedItems node={node} ctx={ctx} />
       </div>
     </details>
+  )
+}
+
+/** For an event group tagged with a venue, show that venue's items (in a
+ *  distinct color) so they can be checked off here too. */
+function VenueLinkedItems({ node, ctx }: { node: TrainingNode; ctx: NodeContext }) {
+  if (!node.venue_ref) return null
+  const venue = ctx.byId.get(node.venue_ref)
+  if (!venue) return null
+  const items = collectItems(venue.id, ctx.childrenByParent)
+  if (items.length === 0) return null
+  return (
+    <div className="venue-linked">
+      <div className="venue-linked-head">From venue · {venue.title}</div>
+      {items.map((it) => (
+        <ItemRow key={it.id} node={it} ctx={ctx} />
+      ))}
+    </div>
   )
 }
 
