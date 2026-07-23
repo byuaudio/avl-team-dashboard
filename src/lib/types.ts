@@ -19,6 +19,7 @@ export interface Profile {
   role: EmployeeRole
   is_active: boolean
   archived: boolean
+  base_rate: number
   created_at: string
 }
 
@@ -136,6 +137,8 @@ export interface TrainingNode {
   image_url: string | null
   /** Event group only: the venue group whose items to also surface here. */
   venue_ref: string | null
+  /** Retired items keep paying those who passed them off, but are hidden/locked. */
+  retired: boolean
 }
 
 /** A skill a student has flagged as a goal to learn (migration 0003). */

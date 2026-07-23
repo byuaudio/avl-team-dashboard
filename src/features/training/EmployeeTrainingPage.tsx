@@ -4,6 +4,7 @@ import { fetchTeamRoster } from '../../lib/api'
 import type { Profile } from '../../lib/types'
 import { ROLE_LABELS } from '../../lib/types'
 import { TrainingSheet } from './TrainingSheet'
+import { PayPanel } from './PayPanel'
 
 /** A trainer/manager viewing (and passing off items on) one employee's sheet. */
 export function EmployeeTrainingPage() {
@@ -28,6 +29,7 @@ export function EmployeeTrainingPage() {
         {employee ? employee.full_name : 'Training Sheet'}
         {employee && <span className="muted"> · {ROLE_LABELS[employee.role]}</span>}
       </h1>
+      {employee && <PayPanel employee={employee} />}
       <TrainingSheet employeeId={employeeId} />
     </div>
   )

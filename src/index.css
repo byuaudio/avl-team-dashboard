@@ -543,6 +543,46 @@ button:disabled {
   opacity: 0.55;
 }
 
+.pay-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  cursor: pointer;
+}
+
+.pay-total {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-success);
+}
+
+.pay-base {
+  margin: 0.75rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.pay-table {
+  font-size: 0.9rem;
+}
+
+.editor-amount {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  font-size: 0.8rem;
+  color: #33475b;
+}
+
+.editor-amount input {
+  width: 4.5rem;
+  font: inherit;
+  padding: 0.1rem 0.3rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
 /* --- Template editor ------------------------------------------------------- */
 
 .editor-tree {

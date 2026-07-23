@@ -318,6 +318,24 @@ export async function changeOwnPassword(password: string): Promise<void> {
   if (error) throw error
 }
 
+// --- Pay (Audio Manager only, enforced in the DB) ---------------------------
+
+export async function setBaseRate(targetId: string, rate: number): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('set_base_rate', {
+    p_target: targetId,
+    p_rate: rate,
+  })
+  if (error) throw error
+}
+
+export async function setCategoryAmount(nodeId: string, amount: number): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('set_category_amount', {
+    p_node: nodeId,
+    p_amount: amount,
+  })
+  if (error) throw error
+}
+
 export interface NewTeamMember {
   fullName: string
   email: string

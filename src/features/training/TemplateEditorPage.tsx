@@ -4,6 +4,7 @@ import {
   deleteTrainingNode,
   fetchTrainingTree,
   renameTrainingNode,
+  setCategoryAmount,
   updateNodeMilestones,
   updateNodePositions,
   updateNodeVenueRef,
@@ -29,7 +30,7 @@ type DropPos = 'before' | 'after' | 'inside'
  * edits persist immediately; the local tree updates optimistically.
  */
 export function TemplateEditorPage() {
-  const { canEditTemplate } = useAuth()
+  const { canEditTemplate, isAudioManager } = useAuth()
   const [nodes, setNodes] = useState<TrainingNode[] | null>(null)
   const [openIds, setOpenIds] = useState<Set<string>>(new Set())
   const [dragId, setDragId] = useState<string | null>(null)
@@ -190,6 +191,11 @@ export function TemplateEditorPage() {
     updateNodeVenueRef(id, venueRef).catch((e: Error) => setError(e.message))
   }, [])
 
+  const setAmount = useCallback((id: string, amount: number) => {
+    setNodes((prev) => (prev ?? []).map((n) => (n.id === id ? { ...n, dollar_value: amount } : n)))
+    setCategoryAmount(id, amount).catch((e: Error) => setError(e.message))
+  }, [])
+
   const remove = useCallback(
     (id: string) => {
       const node = byId.get(id)
@@ -224,6 +230,8 @@ export function TemplateEditorPage() {
     onRename: rename,
     onChangeMilestones: changeMilestones,
     onSetVenueRef: setVenueRef,
+    onSetAmount: setAmount,
+    isAudioManager,
     onAddChild: addChild,
     onRemove: remove,
     onDragStart: setDragId,
@@ -270,12 +278,38 @@ interface EditorContext {
   onRename: (id: string, title: string) => void
   onChangeMilestones: (id: string, m: MilestoneKind[]) => void
   onSetVenueRef: (id: string, venueRef: string | null) => void
+  onSetAmount: (id: string, amount: number) => void
+  isAudioManager: boolean
   onAddChild: (parentId: string | null, kind: NodeKind) => void
   onRemove: (id: string) => void
   onDragStart: (id: string) => void
   onDragEnd: () => void
   onDragOverRow: (id: string, pos: DropPos) => void
   onDropRow: (id: string, pos: DropPos) => void
+}
+
+/** Editable per-category pay amount ($ at 100%). Saves on blur/Enter. */
+function CategoryAmount({ node, onSave }: { node: TrainingNode; onSave: (v: number) => void }) {
+  const [draft, setDraft] = useState(node.dollar_value == null ? '' : String(node.dollar_value))
+  function commit() {
+    const v = Number(draft)
+    if (!Number.isNaN(v) && v !== (node.dollar_value ?? NaN)) onSave(v)
+  }
+  return (
+    <label className="editor-amount" title="Pay for this category at 100%">
+      $
+      <input
+        type="number"
+        step="0.01"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+        }}
+      />
+    </label>
+  )
 }
 
 /** Title of the nearest ancestor category (walking up the tree). */
@@ -402,6 +436,10 @@ function EditorNode({ node, depth, ctx }: { node: TrainingNode; depth: number; c
         )}
 
         <span className={`editor-kind kind-${node.kind}`}>{node.kind}</span>
+
+        {node.kind === 'category' && ctx.isAudioManager && (
+          <CategoryAmount node={node} onSave={(v) => ctx.onSetAmount(node.id, v)} />
+        )}
 
         {isEventGroup && (
           <select
