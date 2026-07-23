@@ -8,8 +8,13 @@ import { getSupabaseClient } from './supabaseClient'
 import type {
   Announcement,
   EmployeeRole,
+  MilestoneKind,
+  MilestoneProgress,
+  NodeKind,
   Profile,
+  TrainingGoal,
   TrainingItem,
+  TrainingNode,
   TrainingProgress,
   TrainingSection,
 } from './types'
@@ -95,6 +100,184 @@ export async function resetPassoff(employeeId: string, itemId: string): Promise<
     p_item_id: itemId,
   })
   if (error) throw error
+}
+
+// --- Real-template tree + per-milestone sign-off (migration 0002) -----------
+
+/** The whole training template tree (all nodes, ordered). */
+export async function fetchTrainingTree(): Promise<TrainingNode[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('training_nodes')
+    .select('*')
+    .order('sort_order')
+  if (error) throw error
+  return data
+}
+
+/** One employee's milestone progress. RLS limits students to their own rows. */
+export async function fetchMilestoneProgressForEmployee(
+  employeeId: string,
+): Promise<MilestoneProgress[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('milestone_progress')
+    .select('*')
+    .eq('employee_id', employeeId)
+  if (error) throw error
+  return data
+}
+
+/** Every milestone row visible to the caller (trainers/managers see all). */
+export async function fetchAllMilestoneProgress(): Promise<MilestoneProgress[]> {
+  const { data, error } = await getSupabaseClient().from('milestone_progress').select('*')
+  if (error) throw error
+  return data
+}
+
+export async function requestMilestone(itemId: string, milestone: MilestoneKind): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('request_milestone', {
+    p_item_id: itemId,
+    p_milestone: milestone,
+  })
+  if (error) throw error
+}
+
+export async function cancelMilestoneRequest(
+  itemId: string,
+  milestone: MilestoneKind,
+): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('cancel_milestone_request', {
+    p_item_id: itemId,
+    p_milestone: milestone,
+  })
+  if (error) throw error
+}
+
+export async function grantMilestone(
+  employeeId: string,
+  itemId: string,
+  milestone: MilestoneKind,
+  notes?: string,
+): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('grant_milestone', {
+    p_employee_id: employeeId,
+    p_item_id: itemId,
+    p_milestone: milestone,
+    p_notes: notes ?? null,
+  })
+  if (error) throw error
+}
+
+export async function resetMilestone(
+  employeeId: string,
+  itemId: string,
+  milestone: MilestoneKind,
+): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('reset_milestone', {
+    p_employee_id: employeeId,
+    p_item_id: itemId,
+    p_milestone: milestone,
+  })
+  if (error) throw error
+}
+
+// --- Student goals ("add to goals") ----------------------------------------
+
+export async function fetchGoalsForEmployee(employeeId: string): Promise<TrainingGoal[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('training_goals')
+    .select('*')
+    .eq('employee_id', employeeId)
+  if (error) throw error
+  return data
+}
+
+export async function addGoal(employeeId: string, itemId: string): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('training_goals')
+    .insert({ employee_id: employeeId, item_id: itemId })
+  if (error) throw error
+}
+
+export async function removeGoal(employeeId: string, itemId: string): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('training_goals')
+    .delete()
+    .eq('employee_id', employeeId)
+    .eq('item_id', itemId)
+  if (error) throw error
+}
+
+// --- Item detail (manager edits the photo + explanation) --------------------
+
+export async function updateNodeDetails(
+  nodeId: string,
+  details: { description: string; image_url: string | null },
+): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('training_nodes')
+    .update(details)
+    .eq('id', nodeId)
+  if (error) throw error
+}
+
+// --- Template editing (managers restructure the tree) -----------------------
+
+export async function createTrainingNode(input: {
+  parent_id: string | null
+  kind: NodeKind
+  title: string
+  sort_order: number
+  milestones?: MilestoneKind[]
+}): Promise<TrainingNode> {
+  const { data, error } = await getSupabaseClient()
+    .from('training_nodes')
+    .insert({ ...input, milestones: input.milestones ?? [] })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function renameTrainingNode(id: string, title: string): Promise<void> {
+  const { error } = await getSupabaseClient().from('training_nodes').update({ title }).eq('id', id)
+  if (error) throw error
+}
+
+export async function updateNodeMilestones(id: string, milestones: MilestoneKind[]): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('training_nodes')
+    .update({ milestones })
+    .eq('id', id)
+  if (error) throw error
+}
+
+/** Tag (or clear) the venue whose items surface under an event group. */
+export async function updateNodeVenueRef(id: string, venueRef: string | null): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('training_nodes')
+    .update({ venue_ref: venueRef })
+    .eq('id', id)
+  if (error) throw error
+}
+
+/** Deletes a node (and, via ON DELETE CASCADE, its whole subtree + progress). */
+export async function deleteTrainingNode(id: string): Promise<void> {
+  const { error } = await getSupabaseClient().from('training_nodes').delete().eq('id', id)
+  if (error) throw error
+}
+
+/** Persist a reorder / reparent: new parent + sort_order for each moved node. */
+export async function updateNodePositions(
+  updates: { id: string; parent_id: string | null; sort_order: number }[],
+): Promise<void> {
+  const client = getSupabaseClient()
+  for (const u of updates) {
+    const { error } = await client
+      .from('training_nodes')
+      .update({ parent_id: u.parent_id, sort_order: u.sort_order })
+      .eq('id', u.id)
+    if (error) throw error
+  }
 }
 
 export interface NewTeamMember {

@@ -3,7 +3,7 @@ import { useAuth } from '../features/auth/AuthContext'
 import { ROLE_LABELS } from '../lib/types'
 
 export function Layout() {
-  const { profile, canGrantPassoffs, signOut } = useAuth()
+  const { profile, canGrantPassoffs, isManager, signOut } = useAuth()
 
   return (
     <div className="app-shell">
@@ -15,6 +15,7 @@ export function Layout() {
           </NavLink>
           <NavLink to="/training">My Training</NavLink>
           {canGrantPassoffs && <NavLink to="/team">Team Training</NavLink>}
+          {isManager && <NavLink to="/template">Edit Template</NavLink>}
         </nav>
         <div className="app-user">
           {profile && (
