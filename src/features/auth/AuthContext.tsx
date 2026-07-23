@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { Session } from '@supabase/supabase-js'
 import { getSupabaseClient } from '../../lib/supabaseClient'
 import type { Profile } from '../../lib/types'
+import { ROLE_RANK } from '../../lib/types'
 
 interface AuthContextValue {
   session: Session | null
@@ -9,9 +10,14 @@ interface AuthContextValue {
   profile: Profile | null
   /** True until the initial session + profile load has finished. */
   loading: boolean
-  /** Trainers and managers can view all sheets and grant pass-offs. */
+  /** Trainers and up can view all sheets and grant pass-offs (rank ≥ 40). */
   canGrantPassoffs: boolean
-  isManager: boolean
+  /** 3/4-time and up can edit the template and manage members (rank ≥ 60). */
+  canEditTemplate: boolean
+  canManageMembers: boolean
+  /** Full-time and up can see pay (rank ≥ 80). */
+  canSeePay: boolean
+  isAudioManager: boolean
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
 }
@@ -59,12 +65,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [session])
 
+  const rank = profile ? ROLE_RANK[profile.role] : 0
   const value: AuthContextValue = {
     session,
     profile,
     loading,
-    canGrantPassoffs: profile?.role === 'student_trainer' || profile?.role === 'manager',
-    isManager: profile?.role === 'manager',
+    canGrantPassoffs: rank >= 40,
+    canEditTemplate: rank >= 60,
+    canManageMembers: rank >= 60,
+    canSeePay: rank >= 80,
+    isAudioManager: profile?.role === 'audio_manager',
     signIn: async (email, password) => {
       const { error } = await getSupabaseClient().auth.signInWithPassword({ email, password })
       return { error: error ? error.message : null }

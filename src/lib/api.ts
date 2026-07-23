@@ -280,6 +280,24 @@ export async function updateNodePositions(
   }
 }
 
+// --- Member management (role ceiling + archiving enforced in the DB) --------
+
+export async function setMemberRole(targetId: string, role: EmployeeRole): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('set_member_role', {
+    p_target: targetId,
+    p_role: role,
+  })
+  if (error) throw error
+}
+
+export async function setMemberArchived(targetId: string, archived: boolean): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('set_member_archived', {
+    p_target: targetId,
+    p_archived: archived,
+  })
+  if (error) throw error
+}
+
 export interface NewTeamMember {
   fullName: string
   email: string

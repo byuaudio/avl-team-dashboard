@@ -539,6 +539,10 @@ button:disabled {
   border-color: transparent;
 }
 
+.row-archived {
+  opacity: 0.55;
+}
+
 /* --- Template editor ------------------------------------------------------- */
 
 .editor-tree {

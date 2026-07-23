@@ -1,13 +1,17 @@
 import { useState, type FormEvent } from 'react'
 import { addTeamMember } from '../../lib/api'
-import { ROLE_LABELS, type EmployeeRole } from '../../lib/types'
+import { ROLE_LABELS, assignableRoles, type EmployeeRole } from '../../lib/types'
+import { useAuth } from '../auth/AuthContext'
 
 /**
- * Manager-only form to add a new team member. On success it clears itself and
- * calls onAdded() so the parent can refresh the roster. Rendered on the Team
- * Training page (gated by isManager there).
+ * Staff form to add a new team member. The role choices are limited to what the
+ * current user may assign (their ceiling). On success it clears itself and calls
+ * onAdded() so the parent can refresh the roster. Rendered on the Team Training
+ * page (gated by canManageMembers there).
  */
 export function AddMemberForm({ onAdded }: { onAdded: () => void }) {
+  const { profile } = useAuth()
+  const roleChoices = assignableRoles(profile?.role)
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -71,7 +75,7 @@ export function AddMemberForm({ onAdded }: { onAdded: () => void }) {
         <label>
           Role
           <select value={role} onChange={(e) => setRole(e.target.value as EmployeeRole)}>
-            {(Object.keys(ROLE_LABELS) as EmployeeRole[]).map((r) => (
+            {roleChoices.map((r) => (
               <option key={r} value={r}>
                 {ROLE_LABELS[r]}
               </option>

@@ -20,8 +20,26 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-const ROLES = ['student', 'student_trainer', 'manager'] as const
-type Role = (typeof ROLES)[number]
+const RANK: Record<string, number> = {
+  audio_manager: 100,
+  full_time: 80,
+  three_quarter_time: 60,
+  student_trainer: 40,
+  student: 20,
+  freelancer: 20,
+  non_audio_student: 20,
+  office_student: 10,
+}
+const ROLES = Object.keys(RANK)
+type Role = string
+
+// Highest rank the caller may assign (mirrors max_assignable_rank in the DB).
+function maxAssignable(role: string): number {
+  if (role === 'audio_manager') return 100
+  if (role === 'full_time') return 60
+  if (role === 'three_quarter_time') return 40
+  return 0
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -50,8 +68,9 @@ Deno.serve(async (req) => {
       .select('role, is_active')
       .eq('id', caller.user.id)
       .single()
-    if (!callerProfile?.is_active || callerProfile.role !== 'manager') {
-      return json({ error: 'Only managers can add team members.' }, 403)
+    const cap = callerProfile?.is_active ? maxAssignable(callerProfile.role) : 0
+    if (cap === 0) {
+      return json({ error: 'You are not allowed to add team members.' }, 403)
     }
 
     // 3. Validate the request body.
@@ -68,6 +87,9 @@ Deno.serve(async (req) => {
     }
     if (!ROLES.includes(role)) {
       return json({ error: 'Invalid role.' }, 400)
+    }
+    if (RANK[role] > cap) {
+      return json({ error: 'That role is above what your permission level can assign.' }, 403)
     }
 
     // 4. Create the account. email_confirm: true lets them sign in immediately

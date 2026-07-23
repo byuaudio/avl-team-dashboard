@@ -1,7 +1,15 @@
 // Row types mirroring the database schema in
 // supabase/migrations/0001_initial_schema.sql. Keep the two in sync.
 
-export type EmployeeRole = 'student' | 'student_trainer' | 'manager'
+export type EmployeeRole =
+  | 'student'
+  | 'student_trainer'
+  | 'three_quarter_time'
+  | 'full_time'
+  | 'audio_manager'
+  | 'freelancer'
+  | 'non_audio_student'
+  | 'office_student'
 
 export type TrainingStatus = 'not_started' | 'passoff_requested' | 'passed_off'
 
@@ -10,6 +18,7 @@ export interface Profile {
   full_name: string
   role: EmployeeRole
   is_active: boolean
+  archived: boolean
   created_at: string
 }
 
@@ -49,7 +58,49 @@ export interface Announcement {
 export const ROLE_LABELS: Record<EmployeeRole, string> = {
   student: 'Student',
   student_trainer: 'Student Trainer',
-  manager: 'Manager',
+  three_quarter_time: '3/4-Time',
+  full_time: 'Full-Time',
+  audio_manager: 'Audio Manager',
+  freelancer: 'Freelancer',
+  non_audio_student: 'Non-Audio Student',
+  office_student: 'Office Student',
+}
+
+/** Access ladder — keep in sync with role_rank() in migration 0007. */
+export const ROLE_RANK: Record<EmployeeRole, number> = {
+  audio_manager: 100,
+  full_time: 80,
+  three_quarter_time: 60,
+  student_trainer: 40,
+  student: 20,
+  freelancer: 20,
+  non_audio_student: 20,
+  office_student: 10,
+}
+
+/** Roles listed high→low, for pickers. */
+export const ROLES_BY_RANK: EmployeeRole[] = (Object.keys(ROLE_LABELS) as EmployeeRole[]).sort(
+  (a, b) => ROLE_RANK[b] - ROLE_RANK[a],
+)
+
+/** Highest rank a given role may assign to others (0 = cannot manage members). */
+export function maxAssignableRank(role: EmployeeRole | undefined): number {
+  switch (role) {
+    case 'audio_manager':
+      return 100
+    case 'full_time':
+      return 60
+    case 'three_quarter_time':
+      return 40
+    default:
+      return 0
+  }
+}
+
+/** The roles a given role is allowed to assign, high→low. */
+export function assignableRoles(role: EmployeeRole | undefined): EmployeeRole[] {
+  const cap = maxAssignableRank(role)
+  return ROLES_BY_RANK.filter((r) => ROLE_RANK[r] <= cap)
 }
 
 // --- Real-template redesign (migration 0002) --------------------------------

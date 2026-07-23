@@ -29,7 +29,7 @@ type DropPos = 'before' | 'after' | 'inside'
  * edits persist immediately; the local tree updates optimistically.
  */
 export function TemplateEditorPage() {
-  const { isManager } = useAuth()
+  const { canEditTemplate } = useAuth()
   const [nodes, setNodes] = useState<TrainingNode[] | null>(null)
   const [openIds, setOpenIds] = useState<Set<string>>(new Set())
   const [dragId, setDragId] = useState<string | null>(null)
@@ -207,7 +207,8 @@ export function TemplateEditorPage() {
     [byId, descendantIds],
   )
 
-  if (!isManager) return <p className="page-message">This page is for managers only.</p>
+  if (!canEditTemplate)
+    return <p className="page-message">This page is for 3/4-time staff and up.</p>
   if (error && !nodes) return <p className="error-text">{error}</p>
   if (!nodes) return <div className="page-message">Loading…</div>
 

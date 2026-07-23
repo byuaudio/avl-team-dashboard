@@ -36,7 +36,7 @@ interface TrainingSheetProps {
  * just mirrors them.
  */
 export function TrainingSheet({ employeeId }: TrainingSheetProps) {
-  const { profile, canGrantPassoffs, isManager } = useAuth()
+  const { profile, canGrantPassoffs, canEditTemplate } = useAuth()
   const [nodes, setNodes] = useState<TrainingNode[] | null>(null)
   const [progress, setProgress] = useState<MilestoneProgress[] | null>(null)
   const [goals, setGoals] = useState<TrainingGoal[] | null>(null)
@@ -193,7 +193,7 @@ export function TrainingSheet({ employeeId }: TrainingSheetProps) {
     nameById,
     isOwnSheet,
     canGrant: canGrantPassoffs && !isOwnSheet,
-    canReset: isManager && !isOwnSheet,
+    canReset: canEditTemplate && !isOwnSheet,
     onRequest: (itemId, m) => runAction(() => requestMilestone(itemId, m), loadProgress),
     onCancel: (itemId, m) => runAction(() => cancelMilestoneRequest(itemId, m), loadProgress),
     onGrant: (itemId, m) =>
@@ -242,7 +242,7 @@ export function TrainingSheet({ employeeId }: TrainingSheetProps) {
       {detailNode && (
         <DetailModal
           node={detailNode}
-          canEdit={isManager}
+          canEdit={canEditTemplate}
           onSave={saveDetails}
           onClose={() => setDetailNode(null)}
         />
