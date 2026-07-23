@@ -654,6 +654,11 @@ button:disabled {
   font-size: 1rem;
 }
 
+.drag-handle-spacer {
+  display: inline-block;
+  width: 1rem;
+}
+
 .editor-toggle,
 .editor-toggle-spacer {
   width: 1.3rem;

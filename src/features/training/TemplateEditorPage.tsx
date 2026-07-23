@@ -38,6 +38,8 @@ export function TemplateEditorPage() {
   const [drop, setDrop] = useState<{ id: string; pos: DropPos } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  // Read-only by default so drags/renames can't happen by accident.
+  const [editMode, setEditMode] = useState(false)
 
   useEffect(() => {
     fetchTrainingTree()
@@ -239,6 +241,7 @@ export function TemplateEditorPage() {
     onSetAmount: setAmount,
     onSetRetired: setRetired,
     isAudioManager,
+    editMode,
     onAddChild: addChild,
     onRemove: remove,
     onDragStart: setDragId,
@@ -256,10 +259,19 @@ export function TemplateEditorPage() {
 
   return (
     <div className="stack">
-      <h1>Edit Training Template</h1>
+      <div className="page-head">
+        <h1>Edit Training Template</h1>
+        <button
+          className={editMode ? 'button-primary' : 'button-secondary'}
+          onClick={() => setEditMode((v) => !v)}
+        >
+          {editMode ? '✏️ Editing on — click when done' : '🔒 Enable editing'}
+        </button>
+      </div>
       <p className="muted">
-        Drag the ⠿ handle to reorder or re-nest. Drop on the top/bottom of a row to place it
-        before/after; drop on the middle to nest it inside. Click a name to rename.
+        {editMode
+          ? 'Drag the ⠿ handle to reorder or re-nest (top/bottom of a row = before/after, middle = nest inside). Click a name to rename. Changes save automatically.'
+          : 'View-only. Click “Enable editing” to make changes.'}
         {saving ? ' · Saving…' : ''}
       </p>
       {error && <p className="error-text">{error}</p>}
@@ -267,9 +279,11 @@ export function TemplateEditorPage() {
         {roots.map((node) => (
           <EditorNode key={node.id} node={node} depth={0} ctx={ctx} />
         ))}
-        <button className="button-secondary" onClick={() => addChild(null, 'level')}>
-          + Add level
-        </button>
+        {editMode && (
+          <button className="button-secondary" onClick={() => addChild(null, 'level')}>
+            + Add level
+          </button>
+        )}
       </section>
     </div>
   )
@@ -288,6 +302,7 @@ interface EditorContext {
   onSetAmount: (id: string, amount: number) => void
   onSetRetired: (id: string, retired: boolean) => void
   isAudioManager: boolean
+  editMode: boolean
   onAddChild: (parentId: string | null, kind: NodeKind) => void
   onRemove: (id: string) => void
   onDragStart: (id: string) => void
@@ -296,12 +311,29 @@ interface EditorContext {
   onDropRow: (id: string, pos: DropPos) => void
 }
 
-/** Editable per-category pay amount ($ at 100%). Saves on blur/Enter. */
-function CategoryAmount({ node, onSave }: { node: TrainingNode; onSave: (v: number) => void }) {
+/** Editable per-category pay amount ($ at 100%). Saves on blur/Enter. Shows a
+ *  read-only 2-decimal value when not in edit mode. */
+function CategoryAmount({
+  node,
+  onSave,
+  editMode,
+}: {
+  node: TrainingNode
+  onSave: (v: number) => void
+  editMode: boolean
+}) {
   const [draft, setDraft] = useState(node.dollar_value == null ? '' : String(node.dollar_value))
   function commit() {
     const v = Number(draft)
     if (!Number.isNaN(v) && v !== (node.dollar_value ?? NaN)) onSave(v)
+    if (!Number.isNaN(v)) setDraft(v.toFixed(2))
+  }
+  if (!editMode) {
+    return (
+      <span className="editor-amount" title="Pay for this category at 100%">
+        {node.dollar_value == null ? '—' : `$${Number(node.dollar_value).toFixed(2)}`}
+      </span>
+    )
   }
   return (
     <label className="editor-amount" title="Pay for this category at 100%">
@@ -370,7 +402,7 @@ function EditorNode({ node, depth, ctx }: { node: TrainingNode; depth: number; c
       : ''
 
   function handleDragOver(e: React.DragEvent) {
-    if (!ctx.dragId || ctx.dragId === node.id) return
+    if (!ctx.editMode || !ctx.dragId || ctx.dragId === node.id) return
     e.preventDefault()
     const rect = e.currentTarget.getBoundingClientRect()
     const y = e.clientY - rect.top
@@ -404,15 +436,19 @@ function EditorNode({ node, depth, ctx }: { node: TrainingNode; depth: number; c
           if (ctx.drop) ctx.onDropRow(node.id, ctx.drop.pos)
         }}
       >
-        <span
-          className="drag-handle"
-          draggable
-          onDragStart={() => ctx.onDragStart(node.id)}
-          onDragEnd={ctx.onDragEnd}
-          title="Drag to move"
-        >
-          ⠿
-        </span>
+        {ctx.editMode ? (
+          <span
+            className="drag-handle"
+            draggable
+            onDragStart={() => ctx.onDragStart(node.id)}
+            onDragEnd={ctx.onDragEnd}
+            title="Drag to move"
+          >
+            ⠿
+          </span>
+        ) : (
+          <span className="drag-handle-spacer" />
+        )}
 
         {isContainer ? (
           <button className="editor-toggle" onClick={() => ctx.onToggle(node.id)}>
@@ -422,34 +458,38 @@ function EditorNode({ node, depth, ctx }: { node: TrainingNode; depth: number; c
           <span className="editor-toggle-spacer" />
         )}
 
-        {editing ? (
-          <input
-            className="editor-name-input"
-            value={text}
-            autoFocus
-            onChange={(e) => setText(e.target.value)}
-            onBlur={saveName}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') saveName()
-              if (e.key === 'Escape') {
-                setText(node.title)
-                setEditing(false)
-              }
-            }}
-          />
+        {ctx.editMode ? (
+          editing ? (
+            <input
+              className="editor-name-input"
+              value={text}
+              autoFocus
+              onChange={(e) => setText(e.target.value)}
+              onBlur={saveName}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') saveName()
+                if (e.key === 'Escape') {
+                  setText(node.title)
+                  setEditing(false)
+                }
+              }}
+            />
+          ) : (
+            <button className="editor-name" onClick={() => setEditing(true)} title="Click to rename">
+              {node.title}
+            </button>
+          )
         ) : (
-          <button className="editor-name" onClick={() => setEditing(true)} title="Click to rename">
-            {node.title}
-          </button>
+          <span className="editor-name">{node.title}</span>
         )}
 
         <span className={`editor-kind kind-${node.kind}`}>{node.kind}</span>
 
         {node.kind === 'category' && ctx.isAudioManager && (
-          <CategoryAmount node={node} onSave={(v) => ctx.onSetAmount(node.id, v)} />
+          <CategoryAmount node={node} onSave={(v) => ctx.onSetAmount(node.id, v)} editMode={ctx.editMode} />
         )}
 
-        {isEventGroup && (
+        {ctx.editMode && isEventGroup && (
           <select
             className="editor-milestones"
             value={node.venue_ref ?? ''}
@@ -465,7 +505,7 @@ function EditorNode({ node, depth, ctx }: { node: TrainingNode; depth: number; c
           </select>
         )}
 
-        {node.kind === 'item' && (
+        {ctx.editMode && node.kind === 'item' && (
           <select
             className="editor-milestones"
             value={presetKey}
@@ -485,36 +525,46 @@ function EditorNode({ node, depth, ctx }: { node: TrainingNode; depth: number; c
           </select>
         )}
 
-        <span className="editor-actions">
-          {isContainer && (
-            <>
-              <button
-                className="chip-button"
-                title="Add an item inside"
-                onClick={() => ctx.onAddChild(node.id, 'item')}
-              >
-                + item
-              </button>
-              <button
-                className="chip-button"
-                title="Add a sub-group inside"
-                onClick={() => ctx.onAddChild(node.id, node.kind === 'level' ? 'category' : 'group')}
-              >
-                + group
-              </button>
-            </>
-          )}
-          <button
-            className="chip-button"
-            title={node.retired ? 'Un-retire (make active again)' : 'Retire (keeps paying, hides/locks)'}
-            onClick={() => ctx.onSetRetired(node.id, !node.retired)}
-          >
-            {node.retired ? 'Un-retire' : 'Retire'}
-          </button>
-          <button className="chip-button chip-button-danger" title="Delete" onClick={() => ctx.onRemove(node.id)}>
-            ✕
-          </button>
-        </span>
+        {ctx.editMode && (
+          <span className="editor-actions">
+            {isContainer && (
+              <>
+                <button
+                  className="chip-button"
+                  title="Add an item inside"
+                  onClick={() => ctx.onAddChild(node.id, 'item')}
+                >
+                  + item
+                </button>
+                <button
+                  className="chip-button"
+                  title="Add a sub-group inside"
+                  onClick={() =>
+                    ctx.onAddChild(node.id, node.kind === 'level' ? 'category' : 'group')
+                  }
+                >
+                  + group
+                </button>
+              </>
+            )}
+            <button
+              className="chip-button"
+              title={
+                node.retired ? 'Un-retire (make active again)' : 'Retire (keeps paying, hides/locks)'
+              }
+              onClick={() => ctx.onSetRetired(node.id, !node.retired)}
+            >
+              {node.retired ? 'Un-retire' : 'Retire'}
+            </button>
+            <button
+              className="chip-button chip-button-danger"
+              title="Delete"
+              onClick={() => ctx.onRemove(node.id)}
+            >
+              ✕
+            </button>
+          </span>
+        )}
       </div>
 
       {isContainer && isOpen && (
