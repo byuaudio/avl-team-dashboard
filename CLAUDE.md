@@ -31,9 +31,18 @@ manual test steps and what a correct result looks like.
 
 ## Docs
 
+- [ONBOARDING.md](ONBOARDING.md) — new-developer setup + collaboration workflow (read first)
 - [PROJECT.md](PROJECT.md) — vision, features, roadmap, current priorities
 - [ARCHITECTURE.md](ARCHITECTURE.md) — system design, schema, folder map, where to change what
 - [CONVENTIONS.md](CONVENTIONS.md) — coding standards and invariants
 - [DECISIONS.md](DECISIONS.md) — architecture decision log
+- [COMPENSATION.md](COMPENSATION.md) — pay model + formulas
 - [AI_NOTES.md](AI_NOTES.md) — context for future AI sessions (assumptions, pitfalls)
 - [SETUP.md](SETUP.md) — one-time Supabase / GitHub / local setup walkthrough
+
+## Collaboration
+
+Two developers share ONE Supabase project and the live site. Work on branches;
+`main` auto-deploys. Schema changes are shared and immediate — coordinate first,
+use a new numbered migration (never edit an applied one), and update
+`src/lib/types.ts` to match. See ONBOARDING.md.
