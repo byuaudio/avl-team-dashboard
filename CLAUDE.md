@@ -37,6 +37,7 @@ manual test steps and what a correct result looks like.
 - [CONVENTIONS.md](CONVENTIONS.md) — coding standards and invariants
 - [DECISIONS.md](DECISIONS.md) — architecture decision log
 - [COMPENSATION.md](COMPENSATION.md) — pay model + formulas
+- [SECURITY-OVERVIEW.md](SECURITY-OVERVIEW.md) — architecture/data/security overview for SOC review
 - [AI_NOTES.md](AI_NOTES.md) — context for future AI sessions (assumptions, pitfalls)
 - [SETUP.md](SETUP.md) — one-time Supabase / GitHub / local setup walkthrough
 
