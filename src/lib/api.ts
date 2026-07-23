@@ -13,6 +13,8 @@ import type {
   MilestoneKind,
   MilestoneProgress,
   NodeKind,
+  PayAdjustment,
+  PayHistory,
   Profile,
   TrainingGoal,
   TrainingItem,
@@ -393,6 +395,54 @@ export async function setPriorSemesters(targetId: string, count: number): Promis
     p_count: count,
   })
   if (error) throw error
+}
+
+// --- Pay adjustments, payroll-cleared rate, and history ---------------------
+
+export async function fetchAdjustments(employeeId: string): Promise<PayAdjustment[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('pay_adjustments')
+    .select('*')
+    .eq('employee_id', employeeId)
+    .order('created_at')
+  if (error) throw error
+  return data
+}
+
+export async function addAdjustment(
+  employeeId: string,
+  amount: number,
+  note: string,
+): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('pay_adjustments')
+    .insert({ employee_id: employeeId, amount, note })
+  if (error) throw error
+}
+
+export async function deleteAdjustment(id: string): Promise<void> {
+  const { error } = await getSupabaseClient().from('pay_adjustments').delete().eq('id', id)
+  if (error) throw error
+}
+
+/** Audio Manager submits a rate to payroll (records history, sets cleared rate). */
+export async function submitPay(targetId: string, newRate: number, note = ''): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('submit_pay', {
+    p_target: targetId,
+    p_new_rate: newRate,
+    p_note: note,
+  })
+  if (error) throw error
+}
+
+export async function fetchPayHistory(employeeId: string): Promise<PayHistory[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('pay_history')
+    .select('*')
+    .eq('employee_id', employeeId)
+    .order('submitted_at', { ascending: false })
+  if (error) throw error
+  return data
 }
 
 export interface NewTeamMember {

@@ -21,7 +21,29 @@ export interface Profile {
   archived: boolean
   base_rate: number
   prior_semesters: number
+  /** The rate payroll has cleared (separate from the live computed tally). */
+  submitted_rate: number | null
+  submitted_at: string | null
   created_at: string
+}
+
+export interface PayAdjustment {
+  id: string
+  employee_id: string
+  amount: number
+  note: string
+  created_at: string
+}
+
+export interface PayHistory {
+  id: string
+  employee_id: string
+  new_rate: number
+  previous_rate: number | null
+  increase: number | null
+  submitted_at: string
+  note: string
+  created_by: string | null
 }
 
 export type SemesterTerm = 'winter' | 'summer' | 'fall'

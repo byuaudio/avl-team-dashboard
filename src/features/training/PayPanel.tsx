@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  addAdjustment,
+  deleteAdjustment,
+  fetchAdjustments,
   fetchCompSettings,
   fetchMilestoneProgressForEmployee,
   fetchSemesters,
   fetchTrainingTree,
   setBaseRate,
-  setPriorSemesters,
-  updateCompSettings,
+  submitPay,
   upsertSemester,
   deleteSemester,
 } from '../../lib/api'
@@ -15,6 +17,7 @@ import type {
   CompSettings,
   EmployeeSemester,
   MilestoneProgress,
+  PayAdjustment,
   Profile,
   SemesterTerm,
   TrainingNode,
@@ -27,10 +30,10 @@ const pct = (n: number) => `${Math.round(n * 100)}%`
 const TERMS: SemesterTerm[] = ['winter', 'summer', 'fall']
 
 /**
- * Full pay breakdown for one employee (visible to Full-Time / Audio Manager):
- * base + prior-semester credit + training + loyalty + soft-skills. Full-time+
- * can enter semester hours/scores; the Audio Manager edits the base rate, prior
- * semester count, and team-wide metrics.
+ * Full pay breakdown for one employee (Full-Time / Audio Manager). Shows the
+ * payroll-cleared rate alongside the live computed tally, with per-semester
+ * loyalty & soft-skills, free-form adjustments, and (for the AM) a Submit-to-
+ * payroll action. Team-wide metrics live on the Pay Settings page.
  */
 export function PayPanel({ employee }: { employee: Profile }) {
   const { canSeePay, isAudioManager } = useAuth()
@@ -38,18 +41,25 @@ export function PayPanel({ employee }: { employee: Profile }) {
   const [progress, setProgress] = useState<MilestoneProgress[] | null>(null)
   const [settings, setSettings] = useState<CompSettings | null>(null)
   const [semesters, setSemesters] = useState<EmployeeSemester[] | null>(null)
+  const [adjustments, setAdjustments] = useState<PayAdjustment[] | null>(null)
   const [baseRate, setBaseRateState] = useState(employee.base_rate)
-  const [prior, setPrior] = useState(employee.prior_semesters)
+  const [cleared, setCleared] = useState<{ rate: number | null; at: string | null }>({
+    rate: employee.submitted_rate,
+    at: employee.submitted_at,
+  })
   const [error, setError] = useState<string | null>(null)
 
   const reloadSemesters = useCallback(() => {
     fetchSemesters(employee.id).then(setSemesters).catch((e: Error) => setError(e.message))
   }, [employee.id])
+  const reloadAdjustments = useCallback(() => {
+    fetchAdjustments(employee.id).then(setAdjustments).catch((e: Error) => setError(e.message))
+  }, [employee.id])
 
   useEffect(() => {
     setBaseRateState(employee.base_rate)
-    setPrior(employee.prior_semesters)
-  }, [employee.base_rate, employee.prior_semesters])
+    setCleared({ rate: employee.submitted_rate, at: employee.submitted_at })
+  }, [employee.base_rate, employee.submitted_rate, employee.submitted_at])
 
   useEffect(() => {
     if (!canSeePay) return
@@ -58,12 +68,14 @@ export function PayPanel({ employee }: { employee: Profile }) {
       fetchMilestoneProgressForEmployee(employee.id),
       fetchCompSettings(),
       fetchSemesters(employee.id),
+      fetchAdjustments(employee.id),
     ])
-      .then(([n, p, s, sem]) => {
+      .then(([n, p, s, sem, adj]) => {
         setNodes(n)
         setProgress(p)
         setSettings(s)
         setSemesters(sem)
+        setAdjustments(adj)
       })
       .catch((e: Error) => setError(e.message))
   }, [canSeePay, employee.id])
@@ -91,19 +103,32 @@ export function PayPanel({ employee }: { employee: Profile }) {
     )
   }
   if (error) return <p className="error-text">{error}</p>
-  if (!training || !loyalty || !soft || !settings || !semesters) {
+  if (!training || !loyalty || !soft || !settings || !semesters || !adjustments) {
     return <div className="page-message">Calculating pay…</div>
   }
 
-  const priorCredit = prior * settings.prior_semester_value
+  const adjTotal = adjustments.reduce((a, b) => a + Number(b.amount), 0)
   const trainingEarned = training.total - training.baseRate
-  const grand = training.total + priorCredit + loyalty.total + soft.total
+  const grand = training.total + adjTotal + loyalty.total + soft.total
+
+  async function submit() {
+    setError(null)
+    try {
+      await submitPay(employee.id, grand)
+      setCleared({ rate: grand, at: new Date().toISOString().slice(0, 10) })
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }
 
   return (
-    <details className="card">
+    <details className="card" open>
       <summary className="pay-summary">
         <span className="tree-title">Pay</span>
         <span className="pay-total">{money(grand)}/hr</span>
+        <span className="muted">
+          cleared: {cleared.rate == null ? '—' : `${money(cleared.rate)}${cleared.at ? ` (${cleared.at})` : ''}`}
+        </span>
       </summary>
 
       <table className="training-table pay-table">
@@ -125,24 +150,6 @@ export function PayPanel({ employee }: { employee: Profile }) {
             </td>
           </tr>
           <tr>
-            <td>
-              Prior semesters{' '}
-              {isAudioManager ? (
-                <EditableInt
-                  value={prior}
-                  onSave={async (v) => {
-                    await setPriorSemesters(employee.id, v)
-                    setPrior(v)
-                  }}
-                />
-              ) : (
-                <>× {prior}</>
-              )}{' '}
-              × {money(settings.prior_semester_value)}
-            </td>
-            <td>{money(priorCredit)}</td>
-          </tr>
-          <tr>
             <td>Training</td>
             <td>{money(trainingEarned)}</td>
           </tr>
@@ -155,15 +162,50 @@ export function PayPanel({ employee }: { employee: Profile }) {
             <td>{money(soft.total)}</td>
           </tr>
           <tr>
+            <td>Adjustments</td>
+            <td>{money(adjTotal)}</td>
+          </tr>
+          <tr>
             <td>
-              <strong>Total rate</strong>
+              <strong>Computed total</strong>
             </td>
             <td>
               <strong>{money(grand)}/hr</strong>
             </td>
           </tr>
+          <tr>
+            <td>Cleared by payroll</td>
+            <td>
+              {cleared.rate == null ? '—' : money(cleared.rate)}
+              {cleared.at && <span className="muted"> ({cleared.at})</span>}
+              {isAudioManager && (
+                <button className="chip-button chip-button-primary" style={{ marginLeft: '0.5rem' }} onClick={submit}>
+                  Submit {money(grand)}
+                </button>
+              )}
+            </td>
+          </tr>
         </tbody>
       </table>
+
+      {isAudioManager && (
+        <Adjustments
+          employeeId={employee.id}
+          adjustments={adjustments}
+          onChanged={reloadAdjustments}
+          onError={setError}
+        />
+      )}
+
+      <SemesterTable
+        semesters={semesters}
+        loyalty={loyalty}
+        soft={soft}
+        employeeId={employee.id}
+        canManage={canSeePay}
+        onChanged={reloadSemesters}
+        onError={setError}
+      />
 
       <details>
         <summary className="tree-title">Training by category</summary>
@@ -190,20 +232,6 @@ export function PayPanel({ employee }: { employee: Profile }) {
           </tbody>
         </table>
       </details>
-
-      <SemesterTable
-        semesters={semesters}
-        loyalty={loyalty}
-        soft={soft}
-        employeeId={employee.id}
-        canManage={canSeePay}
-        onChanged={reloadSemesters}
-        onError={setError}
-      />
-
-      {isAudioManager && (
-        <CompSettingsForm settings={settings} onSaved={(s) => setSettings(s)} onError={setError} />
-      )}
     </details>
   )
 }
@@ -244,23 +272,82 @@ function EditableRate({ value, onSave }: { value: number; onSave: (v: number) =>
   )
 }
 
-function EditableInt({ value, onSave }: { value: number; onSave: (v: number) => Promise<void> }) {
-  const [draft, setDraft] = useState(String(value))
+function Adjustments({
+  employeeId,
+  adjustments,
+  onChanged,
+  onError,
+}: {
+  employeeId: string
+  adjustments: PayAdjustment[]
+  onChanged: () => void
+  onError: (m: string) => void
+}) {
+  const [amount, setAmount] = useState('')
+  const [note, setNote] = useState('')
+
+  async function add() {
+    const v = Number(amount)
+    if (Number.isNaN(v) || v === 0) return
+    try {
+      await addAdjustment(employeeId, v, note.trim())
+      setAmount('')
+      setNote('')
+      onChanged()
+    } catch (e) {
+      onError((e as Error).message)
+    }
+  }
+
   return (
-    <>
-      ×
-      <input
-        type="number"
-        min="0"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={async () => {
-          const v = Math.max(0, Math.floor(Number(draft) || 0))
-          if (v !== value) await onSave(v)
-        }}
-        style={{ width: '3.5rem' }}
-      />
-    </>
+    <details open>
+      <summary className="tree-title">Adjustments</summary>
+      <table className="training-table pay-table">
+        <tbody>
+          {adjustments.map((a) => (
+            <tr key={a.id}>
+              <td>{a.note || <span className="muted">(no note)</span>}</td>
+              <td>{money(Number(a.amount))}</td>
+              <td>
+                <button
+                  className="chip-button chip-button-danger"
+                  onClick={async () => {
+                    try {
+                      await deleteAdjustment(a.id)
+                      onChanged()
+                    } catch (e) {
+                      onError((e as Error).message)
+                    }
+                  }}
+                >
+                  ✕
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="row-actions" style={{ marginTop: '0.4rem' }}>
+        <input
+          type="number"
+          step="0.01"
+          placeholder="$ (+/−)"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          style={{ width: '6rem' }}
+        />
+        <input
+          type="text"
+          placeholder="Note (e.g. legacy raise for …)"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          style={{ flex: '1 1 12rem' }}
+        />
+        <button className="button-secondary" onClick={add}>
+          + Add adjustment
+        </button>
+      </div>
+    </details>
   )
 }
 
@@ -282,7 +369,7 @@ function SemesterTable({
   onError: (m: string) => void
 }) {
   const loyaltyById = new Map(loyalty.perSemester.map((l) => [l.id, l.raise]))
-  const softById = new Map(soft.perSemester.map((s) => [s.id, s.raise]))
+  const softById = new Map(soft.perSemester.map((s) => [s.id, s]))
   const [addYear, setAddYear] = useState('')
   const [addTerm, setAddTerm] = useState<SemesterTerm>('fall')
 
@@ -312,13 +399,23 @@ function SemesterTable({
       <table className="training-table pay-table">
         <thead>
           <tr>
+            <th></th>
+            <th className="grp-loyalty" colSpan={3}>
+              Loyalty
+            </th>
+            <th className="grp-soft" colSpan={3}>
+              Soft Skills
+            </th>
+            {canManage && <th></th>}
+          </tr>
+          <tr>
             <th>Semester</th>
-            <th>Maint hrs</th>
-            <th>Other hrs</th>
-            <th>Self</th>
-            <th>Supervisor</th>
-            <th>Loyalty</th>
-            <th>Soft</th>
+            <th className="grp-loyalty">Maint hrs</th>
+            <th className="grp-loyalty">Other hrs</th>
+            <th className="grp-loyalty">Raise</th>
+            <th className="grp-soft">Self</th>
+            <th className="grp-soft">Supervisor</th>
+            <th className="grp-soft">Raise</th>
             {canManage && <th></th>}
           </tr>
         </thead>
@@ -327,9 +424,9 @@ function SemesterTable({
             <SemesterRow
               key={sem.id}
               sem={sem}
-              loyalty={loyaltyById.get(sem.id) ?? 0}
-              soft={soft.perSemester.find((s) => s.id === sem.id)}
-              softRaise={softById.get(sem.id) ?? 0}
+              loyaltyRaise={loyaltyById.get(sem.id) ?? 0}
+              soft={softById.get(sem.id)}
+              softRaise={softById.get(sem.id)?.raise ?? 0}
               canManage={canManage}
               onChanged={onChanged}
               onError={onError}
@@ -364,7 +461,7 @@ function SemesterTable({
 
 function SemesterRow({
   sem,
-  loyalty,
+  loyaltyRaise,
   soft,
   softRaise,
   canManage,
@@ -372,7 +469,7 @@ function SemesterRow({
   onError,
 }: {
   sem: EmployeeSemester
-  loyalty: number
+  loyaltyRaise: number
   soft: ReturnType<typeof computeSoftSkills>['perSemester'][number] | undefined
   softRaise: number
   canManage: boolean
@@ -388,21 +485,23 @@ function SemesterRow({
     }
   }
 
-  const numCell = (field: keyof EmployeeSemester, nullable = false) => {
+  const numCell = (field: keyof EmployeeSemester, cls: string, nullable = false) => {
     const raw = sem[field]
-    if (!canManage) return raw == null ? '—' : String(raw)
+    if (!canManage) return <td className={cls}>{raw == null ? '—' : String(raw)}</td>
     return (
-      <input
-        type="number"
-        step="0.01"
-        defaultValue={raw == null ? '' : String(raw)}
-        onBlur={(e) => {
-          const t = e.target.value.trim()
-          const v = t === '' ? (nullable ? null : 0) : Number(t)
-          if (v !== raw) save({ [field]: v } as Partial<EmployeeSemester>)
-        }}
-        style={{ width: '4.5rem' }}
-      />
+      <td className={cls}>
+        <input
+          type="number"
+          step="0.01"
+          defaultValue={raw == null ? '' : String(raw)}
+          onBlur={(e) => {
+            const t = e.target.value.trim()
+            const v = t === '' ? (nullable ? null : 0) : Number(t)
+            if (v !== raw) save({ [field]: v } as Partial<EmployeeSemester>)
+          }}
+          style={{ width: '4.5rem' }}
+        />
+      </td>
     )
   }
 
@@ -411,12 +510,12 @@ function SemesterRow({
       <td>
         {TERM_LABELS[sem.term]} {sem.year}
       </td>
-      <td>{numCell('maintenance_hours')}</td>
-      <td>{numCell('other_hours')}</td>
-      <td>{numCell('self_eval_score', true)}</td>
-      <td>{numCell('supervisor_score', true)}</td>
-      <td>{money(loyalty)}</td>
-      <td>{soft && soft.supervisorScore == null ? '—' : money(softRaise)}</td>
+      {numCell('maintenance_hours', 'grp-loyalty')}
+      {numCell('other_hours', 'grp-loyalty')}
+      <td className="grp-loyalty">{money(loyaltyRaise)}</td>
+      {numCell('self_eval_score', 'grp-soft', true)}
+      {numCell('supervisor_score', 'grp-soft', true)}
+      <td className="grp-soft">{soft && soft.supervisorScore == null ? '—' : money(softRaise)}</td>
       {canManage && (
         <td>
           <button
@@ -435,65 +534,5 @@ function SemesterRow({
         </td>
       )}
     </tr>
-  )
-}
-
-const SETTING_FIELDS: { key: keyof CompSettings; label: string }[] = [
-  { key: 'expected_maintenance_hours', label: 'Expected maintenance hrs' },
-  { key: 'expected_other_hours', label: 'Expected other hrs' },
-  { key: 'weight_maintenance', label: 'Maintenance weight (0.6 = 60%)' },
-  { key: 'weight_other', label: 'Other weight (0.4 = 40%)' },
-  { key: 'loyalty_avg_value', label: 'Loyalty avg value ($)' },
-  { key: 'soft_benchmark', label: 'Soft-skills benchmark score' },
-  { key: 'soft_bench_raise', label: 'Raise at benchmark ($)' },
-  { key: 'soft_max', label: 'Soft-skills max score' },
-  { key: 'soft_additional_at_max', label: 'Additional raise at max ($)' },
-  { key: 'prior_semester_value', label: 'Prior-semester value ($ each)' },
-]
-
-function CompSettingsForm({
-  settings,
-  onSaved,
-  onError,
-}: {
-  settings: CompSettings
-  onSaved: (s: CompSettings) => void
-  onError: (m: string) => void
-}) {
-  const [draft, setDraft] = useState(settings)
-  const [saving, setSaving] = useState(false)
-
-  async function save() {
-    setSaving(true)
-    try {
-      await updateCompSettings(draft)
-      onSaved(draft)
-    } catch (e) {
-      onError((e as Error).message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <details className="member-form">
-      <summary>Pay settings (team-wide)</summary>
-      <div className="settings-grid">
-        {SETTING_FIELDS.map((f) => (
-          <label key={f.key} className="modal-field">
-            {f.label}
-            <input
-              type="number"
-              step="0.01"
-              value={String(draft[f.key])}
-              onChange={(e) => setDraft({ ...draft, [f.key]: Number(e.target.value) })}
-            />
-          </label>
-        ))}
-      </div>
-      <button className="button-primary" onClick={save} disabled={saving}>
-        {saving ? 'Saving…' : 'Save settings'}
-      </button>
-    </details>
   )
 }

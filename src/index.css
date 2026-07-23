@@ -603,6 +603,22 @@ button:disabled {
   margin: 0.75rem 0;
 }
 
+/* Semester table column groups */
+.grp-loyalty {
+  background: #eaf5ee;
+}
+.grp-soft {
+  background: #f0ecfa;
+}
+
+.cleared-rate {
+  background: #eef4ff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  margin: 0;
+}
+
 .editor-amount {
   display: inline-flex;
   align-items: center;
