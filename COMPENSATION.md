@@ -56,15 +56,17 @@ Uses the **supervisor** score only (self-eval is displayed for the employee's
 own tracking but does NOT affect pay).
 
 ```
-raise = (supScore − benchmark) / (max − benchmark) · (maxRaise − benchRaise) + benchRaise
+raise = (supScore − benchmark) / (max − benchmark) · additionalAtMax + benchRaise
 ```
 
-AM-editable: benchmark = 280 ($0.10), max = 420 ($0.20).
+AM-editable: benchmark = 280, benchRaise = $0.10, max = 420, additionalAtMax =
+$0.20. So **max total at 420 = $0.30** ($0.10 + $0.20 additional). One straight
+line, extended below the benchmark:
 
-**OPEN QUESTION (below benchmark):** the P49 formula and the verbal spec
-disagree. Formula → 210 = $0.05, 140 = $0.00. Verbal spec → 210 = $0.00,
-140 = −$0.10 (a steeper decline below benchmark). Must confirm which before
-building. Scores can produce a negative contribution either way.
+- 280 → $0.10, 420 → $0.30, 210 → $0.00, 140 → −$0.10.
+
+Confirmed against the P49 formula (T48 = benchRaise $0.10, T49 = additionalAtMax
+$0.20) and the product owner's examples.
 
 Scores are the SUM of the ~42-question soft-skills questionnaire (see page 28 of
 the sheet). Plan: enter the totals directly at first; build the full
