@@ -205,15 +205,17 @@ export function CalendarPage() {
 
         <div className="calendar-wrap">
           <FullCalendar
-            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+            /* react@7 wrapper (React 19) + core@6 plugins: cross-package types
+               clash but the runtime values are correct, so cast past them. */
+            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin] as never}
             initialView="timeGridWeek"
             headerToolbar={{
               left: 'prev,next today',
               center: 'title',
               right: 'dayGridMonth,timeGridWeek,timeGridDay',
             }}
-            events={events}
-            eventClick={onEventClick}
+            events={events as never}
+            eventClick={onEventClick as never}
             datesSet={(info) =>
               setRange({ from: info.start.toISOString(), to: info.end.toISOString() })
             }

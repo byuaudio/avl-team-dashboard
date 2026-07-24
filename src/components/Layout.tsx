@@ -2,6 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../features/auth/AuthContext'
 import { ROLE_LABELS } from '../lib/types'
 import { NotificationsBell } from './NotificationsBell'
+import { ErrorBoundary } from './ErrorBoundary'
 
 export function Layout() {
   const { profile, canGrantPassoffs, canManageMembers, canSeePay, signOut } = useAuth()
@@ -35,7 +36,9 @@ export function Layout() {
         </div>
       </header>
       <main className="app-main">
-        <Outlet />
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
       </main>
     </div>
   )
