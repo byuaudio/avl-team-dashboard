@@ -49,6 +49,16 @@ first session; its durable rules are baked into CLAUDE.md.
 
 ## Pitfalls
 
+- **FullCalendar + React 19:** this app runs React 19, which removed
+  `findDOMNode`. `@fullcalendar/react@6` uses it and white-screens on mount. Use
+  `@fullcalendar/react@7` (React-19 compatible) with `@fullcalendar/core` +
+  plugins at `6.1.x` (v7 of core/plugins isn't released yet), plus the
+  `temporal-polyfill` peer. The cross-package TypeScript types clash — cast the
+  `plugins`/`events`/`eventClick` props with `as never` in CalendarPage; runtime
+  is correct. Keep all `@fullcalendar/*` versions deliberately chosen, not
+  auto-bumped.
+
+
 - Migration 0001 ends with a blanket
   `revoke execute on all functions in schema public from anon, public` —
   any function added later needs an explicit grant (see CONVENTIONS.md).
