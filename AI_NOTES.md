@@ -49,14 +49,16 @@ first session; its durable rules are baked into CLAUDE.md.
 
 ## Pitfalls
 
-- **FullCalendar + React 19:** this app runs React 19, which removed
-  `findDOMNode`. `@fullcalendar/react@6` uses it and white-screens on mount. Use
-  `@fullcalendar/react@7` (React-19 compatible) with `@fullcalendar/core` +
-  plugins at `6.1.x` (v7 of core/plugins isn't released yet), plus the
-  `temporal-polyfill` peer. The cross-package TypeScript types clash — cast the
-  `plugins`/`events`/`eventClick` props with `as never` in CalendarPage; runtime
-  is correct. Keep all `@fullcalendar/*` versions deliberately chosen, not
-  auto-bumped.
+- **FullCalendar versions must all match (and 6.1.21 supports React 19).** Use
+  `@fullcalendar/core`, `react`, `daygrid`, `timegrid`, `interaction` ALL at
+  `6.1.21`. `@fullcalendar/react@6.1.21` already supports React 19 (peer allows
+  `^19`). Do NOT mix `@fullcalendar/react@7` with core@6 — react@7 depends on
+  core@7, so the mix loads two incompatible core copies and throws at runtime
+  ("Class constructor DayTimeColsView cannot be invoked without 'new'"). v7 of
+  core/plugins is partly pre-release; stay on 6.1.21 across the board. CalendarPage
+  casts `plugins`/`events`/`eventClick` `as never` (harmless leftover; types are
+  consistent at 6.1.21). `temporal-polyfill` is installed (was a react@7 peer) —
+  harmless to keep.
 
 
 - Migration 0001 ends with a blanket
