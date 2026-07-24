@@ -58,7 +58,11 @@ first session; its durable rules are baked into CLAUDE.md.
   core/plugins is partly pre-release; stay on 6.1.21 across the board. CalendarPage
   casts `plugins`/`events`/`eventClick` `as never` (harmless leftover; types are
   consistent at 6.1.21). `temporal-polyfill` is installed (was a react@7 peer) —
-  harmless to keep.
+  harmless to keep. After changing FullCalendar versions, do a **clean reinstall**
+  (`rm -rf node_modules package-lock.json && npm install`): the react@7→6 switch
+  left `@full-ui/headless-calendar` (a react@7 dep) carrying a 2nd copy of
+  `@fullcalendar/core@7`, and two cores throw the same error. `vite.config.ts` sets
+  `build.target: 'esnext'` so native classes aren't down-leveled.
 
 
 - Migration 0001 ends with a blanket
