@@ -8,6 +8,7 @@ import { getSupabaseClient } from './supabaseClient'
 import type {
   Announcement,
   AppNotification,
+  Availability,
   Booking,
   CompSettings,
   EmployeeRole,
@@ -640,6 +641,82 @@ export async function fetchAllAvailabilityBlocks(): Promise<AvailabilityBlock[]>
 
 export async function setMeetingMethods(methods: string[]): Promise<void> {
   const { error } = await getSupabaseClient().rpc('set_meeting_methods', { p_methods: methods })
+  if (error) throw error
+}
+
+// --- Calendar availability (new model) --------------------------------------
+
+export async function fetchAvailability(fromISO: string, toISO: string): Promise<Availability[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('availability')
+    .select('*')
+    .lt('start_at', toISO)
+    .gt('end_at', fromISO)
+    .order('start_at')
+  if (error) throw error
+  return data
+}
+
+export async function addAvailability(
+  rows: Omit<Availability, 'id' | 'created_at'>[],
+): Promise<void> {
+  const { error } = await getSupabaseClient().from('availability').insert(rows)
+  if (error) throw error
+}
+
+export async function updateAvailability(
+  id: string,
+  patch: Partial<Omit<Availability, 'id' | 'trainer_id' | 'created_at'>>,
+): Promise<void> {
+  const { error } = await getSupabaseClient().from('availability').update(patch).eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteAvailability(id: string): Promise<void> {
+  const { error } = await getSupabaseClient().from('availability').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteAvailabilitySeries(seriesId: string): Promise<void> {
+  const { error } = await getSupabaseClient().from('availability').delete().eq('series_id', seriesId)
+  if (error) throw error
+}
+
+export interface SlotCount {
+  availability_id: string
+  start_at: string
+  taken: number
+}
+
+export async function fetchAvailabilityCounts(fromISO: string, toISO: string): Promise<SlotCount[]> {
+  const { data, error } = await getSupabaseClient().rpc('availability_counts', {
+    p_from: fromISO,
+    p_to: toISO,
+  })
+  if (error) throw error
+  return data ?? []
+}
+
+export async function bookSlot(input: {
+  availabilityId: string
+  start: string
+  topic?: string
+  method?: string | null
+  description?: string
+}): Promise<string> {
+  const { data, error } = await getSupabaseClient().rpc('book_slot', {
+    p_availability: input.availabilityId,
+    p_start: input.start,
+    p_topic: input.topic ?? '',
+    p_method: input.method ?? null,
+    p_description: input.description ?? '',
+  })
+  if (error) throw error
+  return data as string
+}
+
+export async function setCalendarColor(color: string): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('set_calendar_color', { p_color: color })
   if (error) throw error
 }
 

@@ -26,6 +26,23 @@ export interface Profile {
   submitted_at: string | null
   /** Meeting methods a trainer offers (In Person, Zoom, …). */
   meeting_methods: string[]
+  /** The trainer's color across the calendar/legend. */
+  calendar_color: string
+  created_at: string
+}
+
+export interface Availability {
+  id: string
+  trainer_id: string
+  start_at: string
+  end_at: string
+  event_type: string
+  capacity: number
+  booking_minutes: number
+  method: string | null
+  notes: string
+  kind: 'open' | 'blackout'
+  series_id: string | null
   created_at: string
 }
 

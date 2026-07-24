@@ -12,6 +12,7 @@ import { TemplateEditorPage } from './features/training/TemplateEditorPage'
 import { RosterPage } from './features/training/RosterPage'
 import { PayrollPage } from './features/training/PayrollPage'
 import { AvailabilityPage } from './features/scheduling/AvailabilityPage'
+import { CalendarPage } from './features/scheduling/CalendarPage'
 import { BookTrainingPage } from './features/scheduling/BookTrainingPage'
 import { MySessionsPage } from './features/scheduling/MySessionsPage'
 import { AccountPage } from './features/auth/AccountPage'
@@ -41,6 +42,7 @@ export default function App() {
             <Route path="team/:employeeId" element={<EmployeeTrainingPage />} />
             <Route path="roster" element={<RosterPage />} />
             <Route path="payroll" element={<PayrollPage />} />
+            <Route path="calendar" element={<CalendarPage />} />
             <Route path="book" element={<BookTrainingPage />} />
             <Route path="sessions" element={<MySessionsPage />} />
             <Route path="availability" element={<AvailabilityPage />} />

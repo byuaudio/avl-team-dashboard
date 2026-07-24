@@ -15,7 +15,7 @@ export function Layout() {
             Dashboard
           </NavLink>
           <NavLink to="/training">My Training</NavLink>
-          <NavLink to="/book">Book Training</NavLink>
+          <NavLink to="/calendar">Calendar</NavLink>
           <NavLink to="/sessions">My Sessions</NavLink>
           {canGrantPassoffs && <NavLink to="/team">Team Training</NavLink>}
           {canGrantPassoffs && <NavLink to="/availability">My Availability</NavLink>}
